@@ -1,0 +1,9 @@
+[project]
+name = "egse-data-decoders"
+version = "0.1.0"
+description = "Classes to extract data from the ENFYS EGSE logfiles"
+readme = "README.md"
+requires-python = ">=3.10,<3.15"
+dependencies = [
+    "bitstruct>=5.0,<9.0"
+]
