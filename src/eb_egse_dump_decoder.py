@@ -86,6 +86,23 @@ if __name__ == "__main__":
         print(f"Error: {str(e)}", file=sys.stderr)
         exit(1)
 
+    sci_header_fields = [
+        "ACQUISITION_MODE",
+        "SOL_NO", "MEASUREMENT_TYPE_ID", "MEASUREMENT_RUN_NO",
+        "startTime", "endTime",
+        "SWIR_OFFSET", "MWIR_OFFSET",
+        "HEATSINK_START_TEMP", "HEATSINK_END_TEMP",
+        "SWIR_START_TEMP", "SWIR_END_TEMP",
+        "MWIR_START_TEMP", "MWIR_END_TEMP",
+        "SAMPLE_DELAY", "FPGA_SAMPLES",
+        "AVERAGING_NUMBER"
+    ]
+    sci_row_fields = [
+        "ABS_STEPS",
+        "SWIR_LOW", "SWIR_MED", "SWIR_HIGH",
+        "MWIR_LOW", "MWIR_MED", "MWIR_HIGH",
+    ]
+
     hk_csv = None
     sci_csv = None
     acq_number = 0
@@ -94,19 +111,9 @@ if __name__ == "__main__":
             if isinstance(packet, TcPacket):
                 print(f"TC: {packet}", file=sys.stderr)
                 if isinstance(packet, TcAcquisition):
-                    if args.outbase is None:
-                        sci_csv = sys.stdout
-                    else:
-                        acq_number += 1
-                        if sci_csv is not None:
-                            sci_csv.close()
-                        sci_csv = Path(f"{args.outbase}_SCI_{acq_number:02d}.csv").open("w")
-                    sci_writer = csv.writer(sci_csv)
-                    sci_writer.writerow([
-                        "ABS_STEPS",
-                        "SWIR_LOW", "SWIR_MED", "SWIR_HIGH",
-                        "MWIR_LOW", "MWIR_MED", "MWIR_HIGH"
-                    ])
+                    if sci_csv is not None and args.outbase is not None:
+                        sci_csv.close()
+                        sci_csv = None
             else:
                 print(f"TM: {packet}", file=sys.stderr)
                 if isinstance(packet, HkPacket):
@@ -120,13 +127,6 @@ if __name__ == "__main__":
                     hk_writer.writerow(packet.values())
                 elif isinstance(packet, ScienceDataPacket):
                     if sci_csv is None:
-                        # This is to catch the odd case where we start
-                        # logging after the ACQUISITION TC has already been
-                        # issued.
-                        print(
-                            "Warning: Science packet received without prior ACQUISITION TC",
-                            file=sys.stderr
-                        )
                         if args.outbase is None:
                             sci_csv = sys.stdout
                         else:
@@ -135,17 +135,14 @@ if __name__ == "__main__":
                                 sci_csv.close()
                             sci_csv = Path(f"{args.outbase}_SCI_{acq_number:02d}.csv").open("w")
                         sci_writer = csv.writer(sci_csv)
-                        sci_writer.writerow([
-                            "ABS_STEPS",
-                            "SWIR_LOW", "SWIR_MED", "SWIR_HIGH",
-                            "MWIR_LOW", "MWIR_MED", "MWIR_HIGH"
-                        ])
+
+                        for field in sci_header_fields:
+                            sci_writer.writerow([field, packet[field]])
+                        sci_writer.writerow([])
+
+                        sci_writer.writerow(sci_row_fields)
                     for row in packet.measurements:
-                        sci_writer.writerow([
-                            row.ABS_STEPS,
-                            row.SWIR_LOW, row.SWIR_MED, row.SWIR_HIGH,
-                            row.MWIR_LOW, row.MWIR_MED, row.MWIR_HIGH
-                        ])
+                        sci_writer.writerow([getattr(row, field) for field in sci_row_fields])
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)
         exit(1)
