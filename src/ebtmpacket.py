@@ -186,18 +186,23 @@ class ScienceDataPacket(TmPacket):
 
     def decode(self) -> None:
         """Decode the science rows."""
-        self.fields["paddedMeasurementLength"] = 1
-        self.fields["unPaddedMeasurementLength"] = 1
-        self.fields["measurements"] = 1
 
         science_data = self.payload[self.template.min_length_bytes:]
+        self.fields["paddedMeasurementLength"] = 1
         self.paddedMeasurementLength = len(science_data)
         science_data = science_data.strip(b"\xAA")
+        self.fields["unPaddedMeasurementLength"] = 1
         self.unPaddedMeasurementLength = len(science_data)
+
+        self.fields["startTime"] = 1
+        self.startTime = self.START_TIME_S + self.START_TIME_MS / 1000
+        self.fields["endTime"] = 1
+        self.endTime = self.END_TIME_S + self.END_TIME_MS / 1000
 
         row_length = self.row_template.min_length_bits // 8
 
         self.measurements = []
+        self.fields["measurements"] = 1
         while len(science_data) > 0:
             self.measurements.append(ScienceRow(*self.row_template.decode(science_data).values()))
             science_data = science_data[row_length:]
@@ -209,6 +214,9 @@ class ScienceDataPacket(TmPacket):
         # won't turn up in the dict-style access.
         for field in (
             "PATTERN", "PACKET_ID", "LOBT_RET_TIME", "BLOCK_LENGTH",
+            "START_TIME_S", "START_TIME_MS",
+            "END_TIME_S", "END_TIME_MS",
+            "RESERVED_0", "RESERVED_1",
             "measurements"
         ):
             del self.fields[field]
