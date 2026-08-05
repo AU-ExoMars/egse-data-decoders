@@ -101,12 +101,12 @@ if __name__ == "__main__":
                         if sci_csv is not None:
                             sci_csv.close()
                         sci_csv = Path(f"{args.outbase}_SCI_{acq_number:02d}.csv").open("w")
-                        sci_writer = csv.writer(sci_csv)
-                        sci_writer.writerow([
-                            "ABS_STEPS", 
-                            "SWIR_LOW", "SWIR_MED", "SWIR_HIGH", 
-                            "MWIR_LOW", "MWIR_MED", "MWIR_HIGH"
-                        ])
+                    sci_writer = csv.writer(sci_csv)
+                    sci_writer.writerow([
+                        "ABS_STEPS",
+                        "SWIR_LOW", "SWIR_MED", "SWIR_HIGH",
+                        "MWIR_LOW", "MWIR_MED", "MWIR_HIGH"
+                    ])
             else:
                 print(f"TM: {packet}", file=sys.stderr)
                 if isinstance(packet, HkPacket):
@@ -119,10 +119,31 @@ if __name__ == "__main__":
                         hk_writer.writerow(packet.keys())
                     hk_writer.writerow(packet.values())
                 elif isinstance(packet, ScienceDataPacket):
+                    if sci_csv is None:
+                        # This is to catch the odd case where we start
+                        # logging after the ACQUISITION TC has already been
+                        # issued.
+                        print(
+                            "Warning: Science packet received without prior ACQUISITION TC",
+                            file=sys.stderr
+                        )
+                        if args.outbase is None:
+                            sci_csv = sys.stdout
+                        else:
+                            acq_number += 1
+                            if sci_csv is not None:
+                                sci_csv.close()
+                            sci_csv = Path(f"{args.outbase}_SCI_{acq_number:02d}.csv").open("w")
+                        sci_writer = csv.writer(sci_csv)
+                        sci_writer.writerow([
+                            "ABS_STEPS",
+                            "SWIR_LOW", "SWIR_MED", "SWIR_HIGH",
+                            "MWIR_LOW", "MWIR_MED", "MWIR_HIGH"
+                        ])
                     for row in packet.measurements:
                         sci_writer.writerow([
-                            row.ABS_STEPS, 
-                            row.SWIR_LOW, row.SWIR_MED, row.SWIR_HIGH, 
+                            row.ABS_STEPS,
+                            row.SWIR_LOW, row.SWIR_MED, row.SWIR_HIGH,
                             row.MWIR_LOW, row.MWIR_MED, row.MWIR_HIGH
                         ])
     except Exception as e:
