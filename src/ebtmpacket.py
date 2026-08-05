@@ -221,6 +221,11 @@ class ScienceDataPacket(TmPacket):
         ):
             del self.fields[field]
 
+    def __str__(self) -> str:
+        """Add the local onboard time to the basic string summary."""
+        return f"{self.typeName}: Time={self.lobt:.05f}, Rows={len(self.measurements)}"
+
+
 
 class ScienceDataCPacket(ScienceDataPacket):
     """Subclass for critical science packets.
