@@ -9,11 +9,11 @@ is called after the template decoding, to perform any further decoding that
 the subclass might wish to do.
 """
 
-import dataclasses
 import tmstruct as tm
 from typing import ClassVar
 
 from packet_decoder import PacketDecoder, PacketTemplate
+from enfys_calibration import RawScienceRow
 
 
 class TmPacket(PacketDecoder):
@@ -161,18 +161,6 @@ class DumpDataPacket(TmPacket):
 
     template: ClassVar[PacketTemplate] = PacketTemplate(tm.dump_data)
 
-@dataclasses.dataclass
-class ScienceRow:
-    """A data class to hold a row within the science data."""
-
-    ABS_STEPS: int
-    SWIR_LOW: int
-    SWIR_MED: int
-    SWIR_HIGH: int
-    MWIR_LOW: int
-    MWIR_MED: int
-    MWIR_HIGH: int
-
 class ScienceDataPacket(TmPacket):
     """Base class for science data packets.
 
@@ -204,7 +192,7 @@ class ScienceDataPacket(TmPacket):
         self.measurements = []
         self.fields["measurements"] = 1
         while len(science_data) > 0:
-            self.measurements.append(ScienceRow(*self.row_template.decode(science_data).values()))
+            self.measurements.append(RawScienceRow(*self.row_template.decode(science_data).values()))
             science_data = science_data[row_length:]
 
         # The tmstruct definition duplicates header fields,

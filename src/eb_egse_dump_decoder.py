@@ -144,5 +144,6 @@ if __name__ == "__main__":
                     for row in packet.measurements:
                         sci_writer.writerow([getattr(row, field) for field in sci_row_fields])
     except Exception as e:
+        raise
         print(f"Error: {str(e)}", file=sys.stderr)
         exit(1)
