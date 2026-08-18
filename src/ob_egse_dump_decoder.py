@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import datetime
 import sys
 import re
 import argparse
@@ -36,7 +37,7 @@ class ObEgseDumpDecoder:
 
         This function reads the file, a line at a time and validates the
         CRC. If this are OK, the hex data is decoded to a TC or TM packet
-        the date (where known) and resulting object are yielded.
+        the unix timestamp (where known) and resulting object are yielded.
 
         Usage would be something like:
 
@@ -53,9 +54,14 @@ class ObEgseDumpDecoder:
                 try:
                     matched = m.groupdict()
 
+                    timestamp = datetime.datetime.strptime(
+                        matched["time"],
+                        "%Y-%m-%d %H:%M:%S.%f", 
+                    ).timestamp()
+
                     # Extract and return the data.
                     packet = TmPacket.frombinary(bytes.fromhex(matched["hex"]))
-                    yield matched["time"], packet
+                    yield timestamp, packet
 
                 except Exception as e:
                     raise ValueError(f"Error at line {line_number}: {e}")

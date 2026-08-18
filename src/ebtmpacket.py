@@ -192,7 +192,7 @@ class ScienceDataPacket(TmPacket):
         self.measurements = []
         self.fields["measurements"] = 1
         while len(science_data) > 0:
-            self.measurements.append(RawScienceRow(*self.row_template.decode(science_data).values()))
+            self.measurements.append(RawScienceRow(*self.row_template.decode(science_data).values(), self.SWIR_OFFSET, self.MWIR_OFFSET))
             science_data = science_data[row_length:]
 
         # The tmstruct definition duplicates header fields,

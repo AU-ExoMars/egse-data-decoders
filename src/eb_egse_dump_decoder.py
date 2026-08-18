@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import datetime
 import sys
 import re
 import argparse
@@ -37,7 +38,7 @@ class EbEgseDumpDecoder:
 
         This function reads the file, a line at a time and validates the
         CRC. If this are OK, the hex data is decoded to a TC or TM packet
-        the date (where known) and resulting object are yielded.
+        the unix timestamp (where known) and resulting object are yielded.
 
         Usage would be something like:
 
@@ -52,7 +53,10 @@ class EbEgseDumpDecoder:
         for line in self.in_file:
             line_number += 1
             if m := re.match(r"^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\s*$", line):
-                timestamp = m.group(1)
+                timestamp = datetime.datetime.strptime(
+                                m.group(1),
+                                "%Y-%m-%d_%H-%M-%S"
+                ).timestamp()
             elif re.match(r"^Telecommand:\s*$", line):
                 try:
                     hexdata = next(self.in_file)

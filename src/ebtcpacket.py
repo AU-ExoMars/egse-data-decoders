@@ -220,7 +220,8 @@ class TcSetAcqConfigs(TcPacket):
             )
         elif self.measurementMode == 1:
             return (
-                f"{self.typeName}: Mode 2, Position={self.startPosition}, "
+                f"{self.typeName}: Mode 2, Table={self.measurementTable}, "
+                f"Position={self.startPosition}, "
                 f"Interval={self.sampleTimeSpacing}ms, "
                 f"Duration={self.measurementDuration}s"
             )
