@@ -1,6 +1,6 @@
 [project]
 name = "egse-data-decoders"
-version = "0.1.0.6"
+version = "0.1.0.8"
 description = "Classes to extract data from the ENFYS EGSE logfiles"
 readme = "README.md"
 requires-python = ">=3.10,<3.15"
