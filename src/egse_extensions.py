@@ -268,6 +268,9 @@ class ObEgseExtensions:
                     # If we have an ongoing sweep, we need to terminate it.
                     add_sweep(start, pos_queue[1], direction)
                     start = None
+                    steps = None
+                    direction = None
+                    runlength = 0
                 continue
 
             if start is None:
