@@ -30,7 +30,7 @@ class EnfysScienceRow:
     """Base class"""
 
     # The model ID, as recorded in science and HK data.
-    model_id: int
+    model_id: int = 0
 
     # The name for this model ID.
     model_name: str = "UNKNOWN"
@@ -119,9 +119,12 @@ class EnfysScienceDataSet:
     """Base class"""
 
     # The model ID, as recorded in science and HK data.
-    model_id: int
+    model_id: int = 0
 
-    # A brief text name for this model.
+    # The name for this model ID.
+    model_name: str = "UNKNOWN"
+
+    # A brief text name for this data set.
     name: str
 
     # The ADC isn't linear at the top end of the scale, so
