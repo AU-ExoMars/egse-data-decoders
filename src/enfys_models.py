@@ -33,13 +33,13 @@ class EMScienceDataSet(EnfysScienceDataSet):
     max_usable_adc_value = 60000
 
     swir_wavelength_model = [ 0.1218, 680.9 ]
-    swir_low_to_medium_model = [ 29.5546, -792.3, 100 ]
-    swir_medium_to_high_model = [ 29.3347, -272.1, 150 ]
+    swir_low_to_medium_model = [27.8733, 7653.9499, 144.5231]
+    swir_medium_to_high_model = [28.2085, 8561.2521, 207.5009]
     swir_dac_offset_model = [ -48.8356, 0 ]
 
     mwir_wavelength_model = [ 0.2220, 1192.9 ]
-    mwir_low_to_medium_model = [ 29.5842, -1265.2, 100 ]
-    mwir_medium_to_high_model = [ 29.5825, -407.7, 100 ]
+    mwir_low_to_medium_model = [27.7184, 7218.4767, 196.8437]
+    mwir_medium_to_high_model = [28.1255, 7618.0343, 147.0526]
     mwir_dac_offset_model = [ -420.2187, 0 ]
 
 class EMEbScienceDataSet(EbEgseExtensions,EMScienceDataSet):

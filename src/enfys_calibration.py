@@ -155,10 +155,10 @@ class EnfysScienceDataSet:
             [ getattr(row, lower_attr), getattr(row, upper_attr) ]
             for row in self.raw_rows 
         ])
+        cal = cal[(cal[:,1] < self.max_usable_adc_value) & (cal[:,0] > 0)]
+
         model = scipy.optimize.curve_fit(
-            gain_function, 
-            cal[cal[:,1] < self.max_usable_adc_value, 0], 
-            cal[cal[:,1] < self.max_usable_adc_value, 1], 
+            gain_function, cal[:,0], cal[:,1],
             bounds=(
                 (-np.inf, -np.inf, self.adc_cutover_bounds[0]),
                 (np.inf, np.inf, self.adc_cutover_bounds[1]),
