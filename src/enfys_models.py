@@ -1,5 +1,6 @@
 from enfys_calibration import EnfysScienceDataSet
 from egse_extensions import EbEgseExtensions, ObEgseExtensions
+from pt1000 import PT1000
 
 class BB2ScienceDataSet(EnfysScienceDataSet):
     model_id = 2
@@ -9,15 +10,20 @@ class BB2ScienceDataSet(EnfysScienceDataSet):
 
     max_usable_adc_value = 60000
 
-    swir_wavelength_model = [ 0.1218, 607.8 ]
-    swir_low_to_medium_model = [ 29.5138, -610.6, 50 ]
-    swir_medium_to_high_model = [ 29.3979, -211.9, 50 ]
-    swir_dac_offset_model = [ -48.771, 0 ]
+    heatsink_pt1000 = PT1000(10000, 1022)
+    swir_pt1000 = PT1000(10028, 1017)
 
+    swir_chop_target = 5000
+    mwir_chop_target = 5000
+
+    swir_wavelength_model = [ 0.1218, 607.8 ]
     mwir_wavelength_model = [ 0.2165, 1096.1 ]
-    mwir_low_to_medium_model = [ 29.5592, -1001.5, 61.4 ]
-    mwir_medium_to_high_model = [ 29.5533, -244.1, 109 ]
-    mwir_dac_offset_model = [ -419.277, 0 ]
+
+    swir_low_to_medium_model = [29.523, -715.3, 58]
+    swir_medium_to_high_model = [29.398, -304.0, 50]
+
+    mwir_low_to_medium_model = [29.591, -1137.5, 69]
+    mwir_medium_to_high_model = [29.588, -357.1, 115]
 
 class BB2EbScienceDataSet(BB2ScienceDataSet,EbEgseExtensions):
     pass
@@ -30,17 +36,24 @@ class EMScienceDataSet(EnfysScienceDataSet):
     model_name = "EM"
 
     name = "EM science data"
+
     max_usable_adc_value = 60000
 
-    swir_wavelength_model = [ 0.1218, 680.9 ]
-    swir_low_to_medium_model = [27.8733, 7653.9499, 144.5231]
-    swir_medium_to_high_model = [28.2085, 8561.2521, 207.5009]
-    swir_dac_offset_model = [ -48.8356, 0 ]
+    # FIXME - these need calibrating.
+    heatsink_pt1000 = PT1000(10000, 1000)
+    swir_pt1000 = PT1000(10000, 1000)
 
+    swir_chop_target = 5000
+    mwir_chop_target = 15000
+
+    swir_wavelength_model = [ 0.1218, 680.9 ]
     mwir_wavelength_model = [ 0.2220, 1192.9 ]
-    mwir_low_to_medium_model = [27.7184, 7218.4767, 196.8437]
-    mwir_medium_to_high_model = [28.1255, 7618.0343, 147.0526]
-    mwir_dac_offset_model = [ -420.2187, 0 ]
+
+    swir_low_to_medium_model = [27.873, 7653.9, 145]
+    swir_medium_to_high_model = [28.208, 8561.3, 208]
+
+    mwir_low_to_medium_model = [27.718, 7218.6, 197]
+    mwir_medium_to_high_model = [28.125, 7618.0, 148]
 
 class EMEbScienceDataSet(EbEgseExtensions,EMScienceDataSet):
     pass

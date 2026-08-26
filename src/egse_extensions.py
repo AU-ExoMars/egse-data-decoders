@@ -47,8 +47,7 @@ class EbEgseExtensions:
             else:
                 acq.end_row = self.acquisitions[i+1].start_row-1
 
-        # For chaining when we're initing and scanning in one go.
-        return self
+        self.tune_models()
 
 
 @dataclasses.dataclass
@@ -74,9 +73,7 @@ class ObEgseExtensions:
     def scan(self):
         self._find_binary_chops()
         self._find_sweeps()
-
-        # For chaining when we're initing and scanning in one go.
-        return self
+        self.tune_models()
 
     def _find_binary_chops(self) -> None:
         """Find binary chops within the provided science data.
