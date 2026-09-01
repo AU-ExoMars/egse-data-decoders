@@ -3,6 +3,7 @@ import numpy as np
 import scipy
 import warnings
 import pt1000
+import pathlib
 
 @dataclasses.dataclass
 class RawScienceRow:
@@ -43,6 +44,9 @@ class EnfysScienceDataSet:
     # The name for this model ID.
     model_name: str = "UNKNOWN"
 
+    # Where the data came from - optional.
+    origin_file: pathlib.Path
+
     # A brief text name for this data set.
     name: str
 
@@ -81,7 +85,10 @@ class EnfysScienceDataSet:
     # Used in modelling.
     adc_cutover_bounds = [50, 300]
 
-    def __init__(self, raw_rows=[], dark=None, flat=None, name=None):
+    def __init__(self, raw_rows=[], dark=None, flat=None, name=None, origin_file=None):
+        if origin_file is not None:
+            self.origin_file = pathlib.Path(origin_file)
+
         if name is not None:
             self.name = name
         self.raw_rows = raw_rows.copy()
