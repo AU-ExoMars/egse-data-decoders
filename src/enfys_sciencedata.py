@@ -45,7 +45,7 @@ class EnfysScienceDataSet:
     model_name: str = "UNKNOWN"
 
     # Where the data came from - optional.
-    origin_file: pathlib.Path
+    origin_file: pathlib.Path = None
 
     # A brief text name for this data set.
     name: str

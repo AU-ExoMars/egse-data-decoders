@@ -1,4 +1,5 @@
-from enfys_calibration import EnfysScienceDataSet
+from enfys_sciencedata import EnfysScienceDataSet
+from enfys_hkdata import EnfysObHkDataSet
 from egse_extensions import EbEgseExtensions, ObEgseExtensions
 from pt1000 import PT1000
 
@@ -10,8 +11,8 @@ class BB2ScienceDataSet(EnfysScienceDataSet):
 
     max_usable_adc_value = 60000
 
-    heatsink_pt1000 = PT1000(10000, 1022)
-    swir_pt1000 = PT1000(10028, 1017)
+    heatsink_pt1000 = PT1000(10000, 1021.31)
+    swir_pt1000 = PT1000(10000, 1013.02)
 
     swir_chop_target = 5000
     mwir_chop_target = 5000
@@ -40,8 +41,8 @@ class EMScienceDataSet(EnfysScienceDataSet):
     max_usable_adc_value = 60000
 
     # FIXME - these need calibrating.
-    heatsink_pt1000 = PT1000(10000, 1000)
-    swir_pt1000 = PT1000(10000, 1000)
+    heatsink_pt1000 = PT1000(10046, 1006)
+    swir_pt1000 = PT1000(9906, 988)
 
     swir_chop_target = 5000
     mwir_chop_target = 15000
@@ -61,3 +62,32 @@ class EMEbScienceDataSet(EbEgseExtensions,EMScienceDataSet):
 class EMObScienceDataSet(ObEgseExtensions,EMScienceDataSet):
     pass
     
+class BB2ObHkDataSet:
+    model_id = 2
+    model_name = "BB2"
+    name = "BB2 OB HK data"
+
+    digital_pt1000 = PT1000(1000, 1000)
+    detector_pt1000 = PT1000(1000, 1000)
+    motor_pt1000 = PT1000(1000, 1000)
+    mechanism_pt1000 = PT1000(1000, 1000)
+
+    motor_current_slope = 1
+    voltage_3v3_slope = 1
+    voltage_1v5_slope = 1
+    mech_current_slope = 1
+
+class EMObHkDataSet:
+    model_id = 4
+    model_name = "EM"
+    name = "EM OB HK data"
+
+    digital_pt1000 = PT1000(1000, 1000)
+    detector_pt1000 = PT1000(1000, 1000)
+    motor_pt1000 = PT1000(1000, 1000)
+    mechanism_pt1000 = PT1000(1000, 1000)
+
+    motor_current_slope = 1
+    voltage_3v3_slope = 1
+    voltage_1v5_slope = 1
+    mech_current_slope = 1

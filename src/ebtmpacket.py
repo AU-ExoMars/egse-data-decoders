@@ -13,7 +13,7 @@ import tmstruct as tm
 from typing import ClassVar
 
 from packet_decoder import PacketDecoder, PacketTemplate
-from enfys_calibration import RawScienceRow
+from enfys_sciencedata import RawScienceRow
 
 
 class TmPacket(PacketDecoder):
