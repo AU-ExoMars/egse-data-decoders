@@ -136,23 +136,25 @@ class PT1000:
     def refine_calibration(self,
         dn_values: list[int],
         temperature_values: list[float],
-        r_upper_tolerance_percent: float = 1,
-        r_0_tolerance_percent: float = 5,
-        r_upper_search_steps: int = 100,
-        r_0_search_steps: int = 100,
     ) -> tuple[float, float, float]:
-        """Refine the calibration values for r_upper and r_0.
+        """Refine the calibration value r_0.
 
         Neither resistor is likely to be perfectly on spec and,
         even with a 1% upper and 5% PT1000 tolerance, this can
         translate to errors in excess of 10 degrees. This method
         takes arrays of DN and temperature values and attempts to
-        refine the values of r_upper and r_0 to improve the model's
-        fit to the data.
+        refine the value of r_0 to improve the model's fit to the data.
 
-        Once calibrated, the values of the r_upper and r_0 attributes
-        will be those found to give the optimum fit. The method also
-        returns these values.
+        r_upper does *not* get modified by this refinement since, for
+        each possible value for r_upper, there's a corresponding value
+        for r_0 which gives the same overall error value. Allowing
+        both to vary could allow arbitrarily unrealistic values for
+        r_upper and r_0 to be selected.
+
+        Once calibrated, the value of the object's r_0 attribute
+        will be that found to give the optimum fit. The method also
+        returns this value, along with the RMS error of prediction
+        for the supplied data.
 
         It's not expected that you'd run this function very often -
         typically you'd use it to characterise a sensor, and then
@@ -160,54 +162,21 @@ class PT1000:
 
         :param dn_values: List (or numpy vector) of ADC DN values.
         :param temperature_values: Corresponding temperatures.
-        :param r_upper_tolerance_percent: Percentage range to search.
-        :param r_0_tolerance_percent: Percentage range to search.
-        :param r_upper_search_steps: Steps across range.
-        :param r_0_search_steps: Steps across range.
         """
-        self._calibration_dn_values = np.array(dn_values)
-        self._calibration_temperature_values = np.array(temperature_values)
 
-        r_upper_range = (
-            self.r_upper*(1-r_upper_tolerance_percent/100),
-            self.r_upper*(1+r_upper_tolerance_percent/100),
-        )
-        r_upper_slice = slice(
-            r_upper_range[0], r_upper_range[1],
-            (r_upper_range[1]-r_upper_range[0])/r_upper_search_steps,
+        model, covar = scipy.optimize.curve_fit(
+            self._calibration_estimator,
+            np.array(dn_values),
+            np.array(temperature_values)
         )
 
-        r_0_range = (
-            self.r_0*(1-r_0_tolerance_percent/100),
-            self.r_0*(1+r_0_tolerance_percent/100),
-        )
-        r_0_slice = slice(
-            r_0_range[0], r_0_range[1],
-            (r_0_range[1]-r_0_range[0])/r_0_search_steps,
-        )
+        self.r_0 = model[0]
 
-        model = scipy.optimize.brute(self._calibration_estimator,
-            ranges = (r_upper_slice, r_0_slice),
-            workers = -1,
-            finish = None,
-        )
+        error = np.sqrt(sum((temperature_values-self.dn_to_t(dn_values))**2)/dn_values.shape[0])
 
-        self.r_upper, self.r_0 = model
-        error = self._calibration_estimator(model)
+        return self.r_0, error
 
-        del self._calibration_dn_values
-        del self._calibration_temperature_values
-
-        return self.r_upper, self.r_0, error
-
-    def _calibration_estimator(self, x: tuple[float,float]) -> float:
-        self.r_upper, self.r_0 = x
-
-        estimated_temperatures = self.dn_to_t(self._calibration_dn_values)
-
-        errors = estimated_temperatures - self._calibration_temperature_values
-
-        ret = np.sqrt(sum(errors**2)/errors.shape[0])
-
-        return ret
+    def _calibration_estimator(self, x: float, r_0: float) -> float:
+        self.r_0 = r_0
+        return self.dn_to_t(x)
 
