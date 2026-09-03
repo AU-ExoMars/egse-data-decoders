@@ -62,32 +62,34 @@ class EMEbScienceDataSet(EbEgseExtensions,EMScienceDataSet):
 class EMObScienceDataSet(ObEgseExtensions,EMScienceDataSet):
     pass
     
-class BB2ObHkDataSet:
+class BB2ObHkDataSet(EnfysObHkDataSet):
     model_id = 2
     model_name = "BB2"
     name = "BB2 OB HK data"
 
-    digital_pt1000 = PT1000(1000, 1000)
-    detector_pt1000 = PT1000(1000, 1000)
-    motor_pt1000 = PT1000(1000, 1000)
-    mechanism_pt1000 = PT1000(1000, 1000)
+    # Nominal values, need calibration
+    digital_pt1000 = PT1000(1000, 1060.74)
+    detector_pt1000 = PT1000(1000, 1079.80)
+    motor_pt1000 = PT1000(1000, 1017.55)
+    mechanism_pt1000 = PT1000(1000, 1042.92)
 
-    motor_current_slope = 1
-    voltage_3v3_slope = 1
-    voltage_1v5_slope = 1
-    mech_current_slope = 1
+    # Numbers from SWIS.
+    voltage_3v3_slope = 1.0445e-4
+    voltage_1v5_slope = 5.2413e-5
+    mech_current_slope = 3.3897e-3
 
-class EMObHkDataSet:
+class EMObHkDataSet(EnfysObHkDataSet):
     model_id = 4
     model_name = "EM"
     name = "EM OB HK data"
 
-    digital_pt1000 = PT1000(1000, 1000)
-    detector_pt1000 = PT1000(1000, 1000)
-    motor_pt1000 = PT1000(1000, 1000)
-    mechanism_pt1000 = PT1000(1000, 1000)
+    # Nominal values, need calibration
+    digital_pt1000 = PT1000(1000, 1035.40)
+    detector_pt1000 = PT1000(1000, 1033.15)
+    motor_pt1000 = PT1000(1000, 1053.38)
+    mechanism_pt1000 = PT1000(1000, 1028.94)
 
-    motor_current_slope = 1
-    voltage_3v3_slope = 1
-    voltage_1v5_slope = 1
-    mech_current_slope = 1
+    # Numbers from SWIS.
+    voltage_3v3_slope = 1.2231e-4
+    voltage_1v5_slope = 6.1367e-5
+    mech_current_slope = 3.7531e-3

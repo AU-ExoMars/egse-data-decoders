@@ -6,7 +6,7 @@ import pt1000
 import pathlib
 
 @dataclasses.dataclass
-class ObHkRow:
+class RawObHkRow:
     """A data class to hold a row within the OB HK data."""
 
     MOD_ID: int
@@ -50,10 +50,9 @@ class ObHkRow:
     timestamp: float = dataclasses.field(default=None, kw_only=True)
 
 @dataclasses.dataclass
-class ProcessedObHkRow(ObHkRow):
+class ProcessedObHkRow(RawObHkRow):
     """HK row with added data decode"""
 
-    motor_current: float = dataclasses.field(default=None, kw_only=True)
     voltage_3v3: float = dataclasses.field(default=None, kw_only=True)
     voltage_1v5: float = dataclasses.field(default=None, kw_only=True)
     digital_temperature: float = dataclasses.field(default=None, kw_only=True)
@@ -84,7 +83,6 @@ class EnfysObHkDataSet:
     mechanism_pt1000: pt1000.PT1000
 
     # Voltage and current sensors
-    motor_current_slope: float
     voltage_3v3_slope: float
     voltage_1v5_slope: float
     mech_current_slope: float
@@ -139,8 +137,7 @@ class EnfysObHkDataSet:
 
         row = self.raw_rows[idx]
 
-        return ProcessedScienceRow(**dataclasses.asdict(row),
-            motor_current = row.MTR_CURRENT * self.motor_current_slope,
+        return ProcessedObHkRow(**dataclasses.asdict(row),
             voltage_3v3 = row.HK_V_3V3 * self.voltage_3v3_slope,
             voltage_1v5 = row.HK_V_1V5 * self.voltage_1v5_slope,
             digital_temperature = self.digital_pt1000(row.DIGITAL_TRP),
