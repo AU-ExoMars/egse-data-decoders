@@ -12,6 +12,7 @@ import tmstruct as tm
 from typing import ClassVar
 
 from packet_decoder import PacketDecoder, PacketTemplate
+from enfys_sciencedata import RawScienceRow
 
 
 class TmPacket(PacketDecoder):
@@ -43,6 +44,28 @@ class HkPacket(TmPacket):
 
 class ScienceDataPacket(TmPacket):
     template: ClassVar[PacketTemplate] = PacketTemplate(tm.sci)
+
+    def decode(self) -> None:
+        """Decode the science row.
+
+        This is mainly present for consistency with the EB
+        ScienceDataPacket, which can hold multiple rows.
+        """
+        self.measurements = [
+            RawScienceRow(
+                ABS_STEPS = self.MTR_ABS_STEPS,
+                SWIR_LOW = self.SWIR_LOW,
+                SWIR_MED = self.SWIR_MED,
+                SWIR_HIGH = self.SWIR_HIGH,
+                MWIR_LOW = self.MWIR_LOW,
+                MWIR_MED = self.MWIR_MED,
+                MWIR_HIGH = self.MWIR_HIGH,
+                SWIR_OFFSET = self.SWIR_OFFSET,
+                MWIR_OFFSET = self.MWIR_OFFSET,
+                HT_SINK_TEMP = self.HT_SINK_TEMP,
+                SWIR_TEMP = self.SWIR_TEMP
+            )
+        ]
 
 class AckPacket(TmPacket):
     template: ClassVar[PacketTemplate] = PacketTemplate(tm.ack_struct)

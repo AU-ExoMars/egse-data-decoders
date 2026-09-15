@@ -3,6 +3,19 @@ import bitstruct
 from collections.abc import Iterator
 from typing import Any, ClassVar
 
+class Templated(type):
+    class MemberTable(dict):
+        def __setitem__(self, name, value):
+            super().__setitem__(name, value)
+            print(name, value)
+            if name == "template":
+                for name, _ in value:
+                    super().__setitem__(name, value)
+
+        @classmethod
+        def __prepare__(metaclass, name, bases):
+            return Templated.MemberTable()
+
 class PacketTemplate:
     """A class to hold a template for parsing binary data.
 
@@ -37,7 +50,7 @@ class PacketTemplate:
         """Decode the supplied packets using the information in the class."""
         return bitstruct.unpack_dict(self.fmt, list(self.bit_offset_of.keys()), packet[self.start_byte:])
         
-class PacketDecoder:
+class PacketDecoder(metaclass=Templated):
     """A base class providing functionality for decoding TC and TM packets.
 
     The idea is that subclasses will provide a template for decoding
