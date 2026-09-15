@@ -60,12 +60,12 @@ class BitstructTemplateClass:
         storing information about sizing and offsets (for possible use by
         class users) and building a bitstruct format string.
         """
-        # I'm not convinced bit_offset_of and bit_size_of are actually
-        # all that useful. But it's easy to generate them here, and
-        # more difficult for a subclass to do it. So let's keep them for
-        # now.
-        cls.bit_offset_of = {}
-        cls.bit_size_of = {}
+        # I'm not convinced the offset and size info is actually
+        # all that useful. But it's easy to generate it here, and
+        # more difficult for a subclass to do it. So let's keep it
+        # for now. The main point is to have a dict indicating which
+        # fields are available.
+        cls.fields = {}
 
         # We need to build the bitstruct format string from the template
         # definition.
@@ -78,7 +78,7 @@ class BitstructTemplateClass:
             # The offset of this item is the length of the
             # data consumed by the partially constructed bitstruct
             # format.
-            cls.bit_offset_of[name] = bitstruct.calcsize(cls.bitstruct_fmt)
+            offset = bitstruct.calcsize(cls.bitstruct_fmt)
 
             # Now we add on the format string for this item.
             cls.bitstruct_fmt += fmt
@@ -89,9 +89,10 @@ class BitstructTemplateClass:
             # around e.g. endianness, so we'll do it this way. Again, maybe
             # nothing will use offset_of and size_of, and I can just remove
             # the whole thing!
-            cls.bit_size_of[name] = (
-                bitstruct.calcsize(cls.bitstruct_fmt) - cls.bit_offset_of[name]
-            )
+            size = bitstruct.calcsize(cls.bitstruct_fmt) - offset
+
+            # Record bit offset and size information for this field.
+            cls.fields[name] = (offset, size)
 
         # For later checking, we want to know how long of a packet is
         # needed.
@@ -100,6 +101,15 @@ class BitstructTemplateClass:
             cls.min_length_bits // 8
             + (1 if cls.min_length_bits & 7 else 0)
         )
+
+        # We also run through the subclass's __annotations__. Any annotated
+        # fields that are present (but not template or start_byte) will also
+        # be added to cls.fields, but with None as the offset and size. This
+        # allows users to iterate over obj.fields.keys(). Useful if you're
+        # doing automatic csv generation, for example.
+        for attr in cls.__annotations__:
+            if attr not in ("template", "start_byte"):
+                cls.fields[attr] = (None, None)
 
     def __init__(self, packet: bytes|None = None, **kwargs: Any) -> None:
         """Class constructor.
@@ -134,25 +144,36 @@ class BitstructTemplateClass:
 
         # If any kwargs have been supplied, examine them.
         for attr, value in kwargs.items():
+            # If the attribute name isn't actually present in the class
+            # "fields" list, raise an exception, rather than allowing
+            # arbitrary members to be set via this avenue.
+            if attr not in self.fields:
+                raise ValueError(f"{attr} is not annotated or templated in this class")
+
             # Raise an exception if a packet was supplied and the
-            # attribute would normally be derived from the packet data.
-            if attr in self.bit_offset_of and packet is not None:
+            # kwargs-supplied attribute would normally be derived from
+            # the packet data.
+            if (
+                    packet is not None and
+                    attr in self.fields and
+                    self.fields[attr][0] is not None
+            ):
                 raise ValueError(f"{attr} was specified both in packet and kwargs")
 
-            # If the attribute name isn't actually present in the class,
-            # raise an exception, rather than allowing arbitrary members to
-            # be set.
-            if not hasattr(self, attr):
-                raise ValueError(f"{attr} is not present in this class")
-
-            # OK, let's do it!
+            # OK, everything looks OK, so set the class attribute.
             setattr(self, attr, value)
 
     def __repr__(self) -> str:
-        """Create a human/machine-readable representation of the object."""
-        ret = []
-        for name, value in vars(self).items():
-            ret.append(f"{name}={value}")
+        """Create a human/machine-readable representation of the object.
+
+        N.B. This will not be properly quoted in the case where fields are
+        not integers. If you create a subclass for which this matters, you
+        should override __repr__.
+        """
+        ret = [
+            f"{name}={getattr(self, name)}"
+                for name in self.fields
+        ]
         return f"{self.__class__.__name__}({', '.join(ret)})"
 
 if __name__ == "__main__":
@@ -164,7 +185,7 @@ if __name__ == "__main__":
             ("arg2", "u1"),
             ("arg3", "u4"),
         ]
-        start_byte = 1
+        start_byte: int = 1
 
     # The "X" should be skipped because of start_byte.
     # "\x74" should decode to arg1=3, arg2=1, arg3=4
