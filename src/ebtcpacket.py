@@ -2,10 +2,15 @@
 from typing import ClassVar
 import tcstruct as tc
 
-from packet_decoder import PacketDecoder, PacketTemplate
+from bitstruct_template_class import BitstructTemplateClass, BitstructTemplateException
 
+class TcPacketException(BitstructTemplateException):
+    pass
 
-class TcPacket(PacketDecoder):
+class TcHeader(BitstructTemplateClass):
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header
+
+class TcPacket(BitstructTemplateClass):
     """The base class for TCs.
 
     This provides the generic primitives for decoding TC packets. Subclasses
@@ -14,358 +19,249 @@ class TcPacket(PacketDecoder):
     """
 
     MAGIC: ClassVar[int] = 0x7C6EA12C
-    header_template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_header)
 
     @classmethod
-    def frombinary(cls: "type[TcPacket]", packet: bytes) -> "TcPacket":
-        """Decode binary data and return an object of the appropriate subclass."""
-        # Create an object of the base type.
-        tc = TcPacket()
+    def frombinary(cls, data):
+        header = TcHeader(data[:TcHeader.min_length_bytes])
+        if header.magic != cls.MAGIC:
+            raise TcPacketException("Incorrect packet magic number")
+        try:
+            return super().frombinary(data[:TcHeader.min_length_bytes+header.dataLen])
+        except BitstructTemplateException as e:
+            raise TcPacketException(f"No subclass accepted this packet (block ID={header.blockId}, data length={header.dataLen})") from e
 
-        if len(packet) < tc.header_template.min_length_bytes:
-            raise ValueError("Packet is too short for a TC header")
-
-        # Decode the TC header.
-        header = tc.header_template.decode(packet)
-
-        # Huh, it's not a TC header.
-        if header["magic"] != tc.MAGIC:
-            raise ValueError(f"Bad magic (0x{header['magic']:08x}), should be 0x{tc.MAGIC:08x}")
-
-        tc.blockType = header["blockType"]
-        tc.instrumentId = header["instrumentId"]
-        tc.blockId = header["blockId"]
-        tc.counter = header["counter"]
-        tc.dataLen = header["dataLen"]
-
-        tc.fields = {
-            "blockType": 1, "instrumentId": 1, "blockId": 1,
-            "counter": 1, "dataLen": 1,
-        }
-
-        if len(packet) != tc.dataLen + tc.header_template.min_length_bytes:
-            raise ValueError("Packet data doesn't match specified length")
-
-        # Call out to a super-class to find the right class for this packet.
-        cls._select_appropriate_subclass(tc, packet[tc.header_template.min_length_bytes:])
-
-        return tc
-
-    @classmethod
-    def subclass_matcher(cls: "type[TcPacket]", tc: "TcPacket") -> bool:
-        """Given a subclass, indicate whether the subclass can handle the tc.
-
-        For TC's, the determination is currently based on just the block Id.
-        We could go deeper for some TC types (e.g. PATCH) where different
-        variants do different things, based on the qualifier. But, at the
-        top level, this is good enough.
-        """
-        return getattr(cls, "blockId", None) == tc.blockId
-
-    def __str__(self) -> str:
-        """By default, just return the packet type name."""
-        return self.typeName
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.blockId is not None and self.blockId != self.matchBlockId:
+            raise TcPacketException("Block ID does not match")
 
 class TcRet(TcPacket):
     """The RET telecommand."""
 
-    blockId: ClassVar[int] = 0x00
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_ret)
+    matchBlockId: ClassVar[int] = 0x00
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_ret
 
-    def decode(self) -> None:
-        """Decode the RET to fractional seconds."""
-        self.fields["ret"] = 1
-        self.ret = self.retSeconds + self.retFractional/65536.0
+    ret: float = None
 
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Set RET to {self.ret:.5f}"
+    def __init__(self, **kwargs):
+        """Class constructor.
+
+        If a packet was passed in, decode the RET to fractional seconds.
+        """
+        super().__init__(**kwargs)
+
+        if "packet" in kwargs:
+            self.ret = self.retSeconds + self.retFractional/65536.0
 
 class TcRequestHk(TcPacket):
     """The REQUEST_HK telecommand."""
 
-    blockId: ClassVar[int] = 0x01
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_request_hk)
+    matchBlockId: ClassVar[int] = 0x01
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_request_hk
 
 class TcPatch(TcPacket):
-    """The PATCH telecommand.
+    """The PATCH telecommand has several variants, we need a cleverer __init__.
 
-    This is a bit complicated, since the patch data structure is variable,
-    based on the qualifier. So we declare the base template to just contain
-    the qualifier, and have a decode() which then finishes the decoding.
+    We'll use TcPatch as a base class, with the various variants subclassing
+    it and declaring their variant ID's. The base class provides a
+    constructor which checks the ID, and that should allow frombinary to
+    find the right one.
+
+    Patching is stateful, and the content of a TC isn't necessarily enough
+    to tell what the packet contains. In particular, pulling the patch data
+    out of the "Finalise" variant potentially requires knowledge of the patch 
+    length from a prior "Initialise" variant. I don't want to build this 
+    intelligence into a low level packet decoder, so we'll just store the
+    remainder of the packet into patchPayload, and higher level code can 
+    post-process if needed.
     """
 
-    blockId: ClassVar[int] = 0x02
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_patch)
+    matchBlockId: ClassVar[int] = 0x02
+    strict_length_checking: ClassVar[bool] = False
 
-    variant_templates: ClassVar[list[PacketTemplate]] = [
-        PacketTemplate(tc.eb_patch_single),
-        PacketTemplate(tc.eb_patch_initialise),
-        PacketTemplate(tc.eb_patch_continuation),
-        PacketTemplate(tc.eb_patch_finalise)
-    ]
+    patchPayload: bytes
 
-    def decode(self) -> None:
-        """Decode the patch information.
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.variant is not None and self.variant != self.matchVariant:
+            raise TcPacketException("Wrong patch variant")
 
-        This uses the already-decoded variant to select one of the
-        variant templates.
-        """
-        template = self.variant_templates[self.variant]
-        for k, v in template.decode(self.payload).items():
-            self.fields[k] = 1
-            setattr(self, k, v)
-        if self.variant != 1:
-            self.patchData = self.payload[template.min_length_bytes:]
+        if "packet" in kwargs:
+            # Single variant has the data length specified in the header.
+            self.patchPayload = kwargs["packet"][self.min_length_bytes:]
+
+class TcPatchSingle(TcPatch):
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_patch_single
+    matchVariant: ClassVar[int] = 0
+
+class TcPatchInitialise(TcPatch):
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_patch_initialise
+    matchVariant: ClassVar[int] = 1
+
+class TcPatchContinuation(TcPatch):
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_patch_continuation
+    matchVariant: ClassVar[int] = 2
+
+class TcPatchFinalise(TcPatch):
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_patch_finalise
+    matchVariant: ClassVar[int] = 3
 
 class TcDump(TcPacket):
     """The DUMP telecommand."""
 
-    blockId: ClassVar[int] = 0x03
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_dump)
+    matchBlockId: ClassVar[int] = 0x03
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_dump
 
 class TcSetHkRate(TcPacket):
     """The SET_HK_RATE telecommand."""
 
-    blockId: ClassVar[int] = 0x04
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_set_hk_rate)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Set HK rate to {self.interval}s"
+    matchBlockId: ClassVar[int] = 0x04
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_hk_rate
 
 class TcMonitorAddr(TcPacket):
     """The MONITOR_ADDR telecommand."""
 
-    blockId: ClassVar[int] = 0x05
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_monitor_addr)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Start monitoring memory address {self.monitorAddress:08x}"
+    matchBlockId: ClassVar[int] = 0x05
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_monitor_addr
 
 class TcAbort(TcPacket):
     """The ABORT telecommand."""
 
-    blockId: ClassVar[int] = 0x06
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_abort)
+    matchBlockId: ClassVar[int] = 0x06
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_abort
 
 class TcGenericTc(TcPacket):
     """The GENERIC_TC telecommand."""
 
-    blockId: ClassVar[int] = 0x07
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_generic_tc)
+    matchBlockId: ClassVar[int] = 0x07
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_generic_tc
 
 class TcSafe(TcPacket):
     """The SAFE telecommand."""
 
-    blockId: ClassVar[int] = 0x08
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_safe)
+    matchBlockId: ClassVar[int] = 0x08
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_safe
 
 class TcStandby(TcPacket):
     """The STANDBY telecommand."""
 
-    blockId: ClassVar[int] = 0x09
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_standby)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Image {self.aswImage}, force = {self.forceLaunch}"
+    matchBlockId: ClassVar[int] = 0x09
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_standby
 
 class TcAcquisition(TcPacket):
     """The ACQUISITION telecommand."""
 
-    blockId: ClassVar[int] = 0x0A
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_acquisition)
+    matchBlockId: ClassVar[int] = 0x0A
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_acquisition
 
 class TcSetMotorConfigs(TcPacket):
     """The SET_MOTOR_CONFIGS telecommand."""
 
-    blockId: ClassVar[int] = 0x0B
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_set_motor_configs)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return (
-            f"{self.typeName}: PeakCurrent={self.motorPeakCurrent}, "
-            f"Speed={self.motorSpeed}, GuardTime={self.motorGuardTime}, "
-            f"RecVal={self.motorRecVal}, RelativeMax={self.motorRelativeMax}"
-        )
+    matchBlockId: ClassVar[int] = 0x0B
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_motor_configs
 
 class TcSetHeaterConfigs(TcPacket):
     """The SET_HEATER_CONFIGS telecommand."""
 
-    blockId: ClassVar[int] = 0x0C
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_set_heater_configs)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return (
-            f"{self.typeName}: Mech={self.mechLowerLimit}-{self.mechUpperLimit}, "
-            f"Det={self.detLowerLimit}-{self.detUpperLimit}"
-        )
+    matchBlockId: ClassVar[int] = 0x0C
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_heater_configs
 
 class TcSetAcqConfigs(TcPacket):
     """The SET_ACQ_CONFIGS telecommand."""
 
-    blockId: ClassVar[int] = 0x0D
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_set_acq_configs)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        if self.measurementMode == 0:
-            return (
-                f"{self.typeName}: Mode 1, Table={self.measurementTable}, "
-                f"Start={self.startPosition}, End={self.endPosition}"
-            )
-        elif self.measurementMode == 1:
-            return (
-                f"{self.typeName}: Mode 2, Table={self.measurementTable}, "
-                f"Position={self.startPosition}, "
-                f"Interval={self.sampleTimeSpacing}ms, "
-                f"Duration={self.measurementDuration}s"
-            )
-        return f"{self.typeName}: UNKNOWN MODE {self.measurementMode}"
+    matchBlockId: ClassVar[int] = 0x0D
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_acq_configs
 
 class TcSetTecSetpoint(TcPacket):
     """The SET_TEC_SETPOINT telecommand."""
 
-    blockId: ClassVar[int] = 0x0E
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_set_tec_setpoint)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Setpoint={self.setpoint}"
+    matchBlockId: ClassVar[int] = 0x0E
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_tec_setpoint
 
 class TcSetFdirLimits(TcPacket):
     """The SET_FDIR_LIMITS telecommand.
 
-    This one's not yet fully decoded either.
+    This one's not yet fully decoded.
     """
 
-    blockId: ClassVar[int] = 0x0F
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_set_fdir_limits)
+    matchBlockId: ClassVar[int] = 0x0F
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_fdir_limits
 
 class TcEnMechBoard(TcPacket):
     """The EN_MECH_BOARD telecommand."""
 
-    blockId: ClassVar[int] = 0x10
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_en_mech_board)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Enable={self.enable}"
+    matchBlockId: ClassVar[int] = 0x10
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_en_mech_board
 
 class TcEnDetBoard(TcPacket):
     """The EN_DET_BOARD telecommand."""
 
-    blockId: ClassVar[int] = 0x11
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_en_det_board)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Enable={self.enable}"
+    matchBlockId: ClassVar[int] = 0x11
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_en_det_board
 
 class TcEnMechHeater(TcPacket):
     """The EN_MECH_HEATER telecommand."""
 
-    blockId: ClassVar[int] = 0x12
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_en_mech_heater)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Enable={self.enable}"
+    matchBlockId: ClassVar[int] = 0x12
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_en_mech_heater
 
 class TcEnDetHeater(TcPacket):
     """The EN_DET_HEATER telecommand."""
 
-    blockId: ClassVar[int] = 0x13
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_en_det_heater)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Enable={self.enable}"
+    matchBlockId: ClassVar[int] = 0x13
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_en_det_heater
 
 class TcEnOb5V(TcPacket):
     """The EN_OB5V telecommand."""
 
-    blockId: ClassVar[int] = 0x14
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_en_ob5v)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Enable={self.enable}"
+    matchBlockId: ClassVar[int] = 0x14
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_en_ob5v
 
 class TcObPark(TcPacket):
     """The OB_PARK telecommand."""
 
-    blockId: ClassVar[int] = 0x14
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_ob_park)
+    matchBlockId: ClassVar[int] = 0x14
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_ob_park
 
 class TcObHoming(TcPacket):
     """The OB_HOMING telecommand."""
 
-    blockId: ClassVar[int] = 0x16
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_ob_homing)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Destination={self.destination}"
+    matchBlockId: ClassVar[int] = 0x16
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_ob_homing
 
 class TcObHk(TcPacket):
     """The OB_HK telecommand."""
 
-    blockId: ClassVar[int] = 0x17
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_ob_hk)
+    matchBlockId: ClassVar[int] = 0x17
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_ob_hk
 
 class TcCheckMemory(TcPacket):
     """The CHECK_MEMORY telecommand."""
 
-    blockId: ClassVar[int] = 0x64
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_check_memory)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Start={self.startAddress:08x}, Length={self.length}"
+    matchBlockId: ClassVar[int] = 0x64
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_check_memory
 
 class TcGoTo(TcPacket):
     """The GOTO telecommand."""
 
-    blockId: ClassVar[int] = 0x65
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_goto)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Address={self.gotoAddress:08x}"
+    matchBlockId: ClassVar[int] = 0x65
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_goto
 
 class TcCopyMemory(TcPacket):
     """The COPY_MEMORY telecommand."""
 
-    blockId: ClassVar[int] = 0x66
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_copy_memory)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return (f"{self.typeName}: From={self.fromAddress:08x}, "
-               f"To={self.toAddress:08x}, Length={self.length}")
+    matchBlockId: ClassVar[int] = 0x66
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_copy_memory
 
 class TcSwitchRs422(TcPacket):
     """The SWITCH_RS422 telecommand."""
 
-    blockId: ClassVar[int] = 0x67
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_switch_rs422)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Port={self.port}"
+    matchBlockId: ClassVar[int] = 0x67
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_switch_rs422
 
 class TcSetTecCurrent(TcPacket):
     """The SET_TEC_CURRENT telecommand."""
 
-    blockId: ClassVar[int] = 0x68
-    template: ClassVar[PacketTemplate] = PacketTemplate(tc.eb_set_tec_current)
-
-    def __str__(self) -> str:
-        """Provide a more detailed summary."""
-        return f"{self.typeName}: Peltier Digital Value={self.peltierDv}"
+    matchBlockId: ClassVar[int] = 0x68
+    template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_tec_current
 

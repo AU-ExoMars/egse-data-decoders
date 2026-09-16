@@ -92,17 +92,18 @@ if __name__ == "__main__":
     try:
         for timestamp, packet in log_file:
             if data_type is None:
-                data_type = packet.typeName
+                data_type = packet.type_name
                 print(f"Data type detected as {data_type}", file=sys.stderr)
                 writer.writerow(["Date", "Time"] + list(packet.keys()))
-            elif data_type != packet.typeName:
+            elif data_type != packet.type_name:
                 print(
                     f"Error: Multiple data types ({data_type} and "
-                    f"{packet.typeName}) were detected in the file!", 
+                    f"{packet.type_name}) were detected in the file!", 
                     file=sys.stderr
                 )
                 exit(1)
-            writer.writerow(timestamp.split(" ") + list(packet.values()))
+            dt = datetime.datetime.fromtimestamp(timestamp)
+            writer.writerow([dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M:%S.%f"), *packet.values()])
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)
         exit(1)

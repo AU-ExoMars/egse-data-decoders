@@ -2,55 +2,9 @@
 import bitstruct
 from collections.abc import Iterator
 from typing import Any, ClassVar
+from bitstruct_template_class import BitstructTemplateClass
 
-class Templated(type):
-    class MemberTable(dict):
-        def __setitem__(self, name, value):
-            super().__setitem__(name, value)
-            print(name, value)
-            if name == "template":
-                for name, _ in value:
-                    super().__setitem__(name, value)
-
-        @classmethod
-        def __prepare__(metaclass, name, bases):
-            return Templated.MemberTable()
-
-class PacketTemplate:
-    """A class to hold a template for parsing binary data.
-
-    start_byte is the position within the bytes data where we'll start
-        reading from. 
-    structure is a list of (name, bitstruct_format) pairs which will be
-        used to decode the data.
-    """
-
-    def __init__(self, structure: list[tuple[str, str]], start_byte: int = 0) -> None:
-        """Class constructor."""
-
-        # The main bulk of this could be a couple of list comprehensions.
-        # But being able to check the offset and size of each item in the
-        # struct is useful for e.g. calculating CRC's
-        self.bit_offset_of = {}
-        self.bit_size_of = {}
-        self.fmt = ""
-        for name, fmt in structure:
-            self.bit_offset_of[name] = bitstruct.calcsize(self.fmt)
-            self.fmt += fmt
-            self.bit_size_of[name] = bitstruct.calcsize(self.fmt) - self.bit_offset_of[name]
-
-        self.start_byte = start_byte
-        self.min_length_bits = bitstruct.calcsize(self.fmt)
-        self.min_length_bytes = self.min_length_bits // 8 + (1 if self.min_length_bits & 7 else 0)
-
-    def min_length(self):
-        """Return the minimum length, in bits, needed to satisfy the format"""
-
-    def decode(self, packet: bytes) -> dict[str, Any]:
-        """Decode the supplied packets using the information in the class."""
-        return bitstruct.unpack_dict(self.fmt, list(self.bit_offset_of.keys()), packet[self.start_byte:])
-        
-class PacketDecoder(metaclass=Templated):
+class PacketDecoder:
     """A base class providing functionality for decoding TC and TM packets.
 
     The idea is that subclasses will provide a template for decoding

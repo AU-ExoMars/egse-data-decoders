@@ -19,10 +19,11 @@ decode operations, such as:
   print(hk.SWIR_OFFSET)
 
 """
-from typing import Any, ClassVar
-
 import bitstruct
+import typing
 
+class BitstructTemplateException(Exception):
+    pass
 
 class BitstructTemplateClass:
     """A base class which can be subclassed using a "tmstruct" template.
@@ -37,6 +38,17 @@ class BitstructTemplateClass:
     The class also provides a constructor which can decode packet data using
     the supplied template, populating the various attributes.
 
+    For convieninence, a "fields" attribute is provided. This is a dict
+    whose keys are attribute names and values are (offset, size) tuples.
+    The dict is populated using the template to identify the packet data
+    offset and bit size of each template entry. It will also contain 
+    entries for any type-hinted class attributes that aren't ClassVar hints.
+    This allows you to build augmented subclasses (e.g. adding a timestamp
+    or further-decoded value) and have these further attributes identified 
+    for e.g. automatic generation of CSV files. These extra .fields entries
+    take a value of (None, None) to indicate they're not present in packet 
+    data.
+
     Example usage:
 
         import tmstruct
@@ -48,9 +60,10 @@ class BitstructTemplateClass:
 
     """
 
-    start_byte: int = 0
+    start_byte: typing.ClassVar[int] = 0
+    strict_length_checking: typing.ClassVar[bool] = True
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
+    def __init_subclass__(cls, **kwargs: typing.Any) -> None:
         """Create subclass attributes and packet parsing info from template.
 
         This method is run when the base class is subclassed. It's assumed
@@ -60,6 +73,13 @@ class BitstructTemplateClass:
         storing information about sizing and offsets (for possible use by
         class users) and building a bitstruct format string.
         """
+
+        # If the subclass doesn't have a template then we can't do any of
+        # the below. Not necessarily an error - the subclass could be an 
+        # intermediate class.
+        if not hasattr(cls, "template"):
+            return
+
         # I'm not convinced the offset and size info is actually
         # all that useful. But it's easy to generate it here, and
         # more difficult for a subclass to do it. So let's keep it
@@ -107,11 +127,13 @@ class BitstructTemplateClass:
         # be added to cls.fields, but with None as the offset and size. This
         # allows users to iterate over obj.fields.keys(). Useful if you're
         # doing automatic csv generation, for example.
-        for attr in cls.__annotations__:
-            if attr not in ("template", "start_byte"):
-                cls.fields[attr] = (None, None)
+        for name, value in typing.get_type_hints(cls).items():
+            if not hasattr(cls, name):
+                setattr(cls, name, None)
+            if typing.get_origin(value) is not typing.ClassVar:
+                cls.fields[name] = (None, None)
 
-    def __init__(self, packet: bytes|None = None, **kwargs: Any) -> None:
+    def __init__(self, packet: bytes|None = None, **kwargs: typing.Any) -> None:
         """Class constructor.
 
         If a packet is given, then the information derived from
@@ -130,15 +152,22 @@ class BitstructTemplateClass:
         objects of e.g. further derived types.
         """
         if packet is not None:
-            # If a packet was supplied, check it's long enough before
-            # trying a decode.
+            # If a packet was supplied, check it's the right length before
+            # attempting a decode. 
             if len(packet) < self.start_byte + self.min_length_bytes:
-                raise ValueError("Packet is too short to decode")
+                raise BitstructTemplateException("Packet too short")
+
+            # By default, we check exact length, but if the class unsets
+            # strict_length_checking, then we only check for minimum length.
+            # Some packet types are variable length, so we have to relax the
+            # check in those cases.
+            if self.strict_length_checking and len(packet) > self.start_byte + self.min_length_bytes:
+                raise BitstructTemplateException("Packet too long")
 
             # Decode according to the bitstruct format string.
             unpacked = bitstruct.unpack(self.bitstruct_fmt, packet[self.start_byte:])
 
-            # Store the unpacket data into the class attributes.
+            # Store the unpacked data into the class attributes.
             for i, value in enumerate(unpacked):
                 setattr(self, self.template[i][0], value)
 
@@ -148,7 +177,7 @@ class BitstructTemplateClass:
             # "fields" list, raise an exception, rather than allowing
             # arbitrary members to be set via this avenue.
             if attr not in self.fields:
-                raise ValueError(f"{attr} is not annotated or templated in this class")
+                raise BitstructTemplateException(f"{attr} is not annotated or templated in this class")
 
             # Raise an exception if a packet was supplied and the
             # kwargs-supplied attribute would normally be derived from
@@ -158,10 +187,73 @@ class BitstructTemplateClass:
                     attr in self.fields and
                     self.fields[attr][0] is not None
             ):
-                raise ValueError(f"{attr} was specified both in packet and kwargs")
+                raise BitstructTemplateException(f"{attr} was specified both in packet and kwargs")
 
             # OK, everything looks OK, so set the class attribute.
             setattr(self, attr, value)
+
+    @property
+    def type_name(self) -> str:
+        """Return the type name that this object ended up as."""
+        return self.__class__.__name__
+
+    @classmethod
+    def fromhex(cls, hex_data: str) -> "BitstructTemplateClass":
+        """Given some hex data, decode it and construct an object.
+
+        Various logging formats exist, so we'll try to be lenient in what we
+        accept.
+        """
+        hex_data = [ x.replace("0x", "") for x in hex_data.strip().split() ]
+        hex_data = [ "0" * (len(x) % 2)+x for x in hex_data ]
+        hex_data = "".join(hex_data)
+        return cls.frombinary(bytes.fromhex(hex_data))
+
+    @classmethod
+    def frombinary(cls, data: bytes):
+        def _recursive_subclasses(cls: "type[BitstructTemplateClass]") -> set:
+            s = set()
+            for c in cls.__subclasses__():
+                s.add(c)
+                s = s.union(_recursive_subclasses(c))
+            return s
+        for c in [cls] + list(_recursive_subclasses(cls)):
+            if hasattr(c, "template"):
+                # We'll offer the data to each subclass, in turn, and
+                # the first one whose constructor accepts the data can
+                # have it. This does imply that constructors should be
+                # careful about what they accept. The base class 
+                # constructor does length checking, but subclasses will
+                # likely need to do further checks.
+                try:
+                    return c(packet=data)
+                except BitstructTemplateException as e:
+                    pass
+        raise BitstructTemplateException("No subclass accepted this packet")
+
+    """
+    We'll allow dict-like retrieval from the class.
+
+    This vastly simplifies matters where you just want to dump all
+    fields to a csv file, for example.
+    """
+
+    def __getitem__(self, key: str) -> typing.Any:
+        """By-key retrieval."""
+        return getattr(self, key)
+
+    def keys(self) -> list[str]:
+        """Dict-style "keys()" method."""
+        return list(self.fields.keys())
+
+    def values(self) -> list[typing.Any]:
+        """Dict-style "values()" method."""
+        return [ getattr(self, key) for key in self.fields ]
+
+    def items(self) -> typing.Iterator[tuple[str, typing.Any]]:
+        """Dict-style "items()" method."""
+        for k in self.fields:
+            yield k, getattr(self, k)
 
     def __repr__(self) -> str:
         """Create a human/machine-readable representation of the object.
@@ -180,12 +272,12 @@ if __name__ == "__main__":
     class BtcTest(BitstructTemplateClass):
         """Example demonstrating usage of class."""
 
-        template: ClassVar[list[tuple[str,str]]] = [
+        template: typing.ClassVar[list[tuple[str,str]]] = [
             ("arg1", "u3"),
             ("arg2", "u1"),
             ("arg3", "u4"),
         ]
-        start_byte: int = 1
+        start_byte: typing.ClassVar[int] = 1
 
     # The "X" should be skipped because of start_byte.
     # "\x74" should decode to arg1=3, arg2=1, arg3=4

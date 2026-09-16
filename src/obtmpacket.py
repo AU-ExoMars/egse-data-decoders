@@ -11,64 +11,45 @@ decoding, to perform any further decoding that the subclass might wish to do.
 import tmstruct as tm
 from typing import ClassVar
 
-from packet_decoder import PacketDecoder, PacketTemplate
-from enfys_sciencedata import RawScienceRow
+from bitstruct_template_class import BitstructTemplateClass, BitstructTemplateException
 
+class TmPacketException(BitstructTemplateException):
+    pass
 
-class TmPacket(PacketDecoder):
+class TmPacket(BitstructTemplateClass):
     """Base class for TM packets from the OB.
 
-    This is a bit naughty, really. There's no "magic" identifier in OB
-    packets that clearly disambiguates them. The EGSE just dumps the data
-    to separate files. Luckily, the various types have different-sized
-    packets, so we can cheat and just compare each subclass's expected
-    size with the packet size.
+    This class doesn't do anything except give us somewhere that we can
+    we can start the recursive search when using frombinary/fromhex. If
+    we started the search from BitstructTemplateClass, it could go through
+    classes that clearly weren't appropriate and potentially return the
+    wrong decode.
     """
 
-    @classmethod
-    def frombinary(cls: "type[TmPacket]", packet: bytes) -> "TmPacket":
-        tm = TmPacket()
-
-        cls._select_appropriate_subclass(tm, packet)
-
-        return tm
-
-    @classmethod
-    def subclass_matcher(cls: "type[TmPacket]", tm: "TmPacket") -> bool:
-        """Given a subclass, indicate whether the subclass can handle the tm."""
-        return len(tm.payload) == cls.template.min_length_bytes
-
-
 class HkPacket(TmPacket):
-    template: ClassVar[PacketTemplate] = PacketTemplate(tm.hk)
+    """An OB HK packet."""
+    template: ClassVar[list[tuple[str, str]]] = tm.hk
 
 class ScienceDataPacket(TmPacket):
-    template: ClassVar[PacketTemplate] = PacketTemplate(tm.sci)
+    """An OB science packet."""
+    template: ClassVar[list[tuple[str, str]]] = tm.sci
 
-    def decode(self) -> None:
-        """Decode the science row.
+    def __init__(self, **kwargs):
+        """Class constructor.
 
-        This is mainly present for consistency with the EB
-        ScienceDataPacket, which can hold multiple rows.
+        This is only present for compatibility with EB science data.
+        An EB science data packet can contain multiple rows of science 
+        data, so we decode it into a "measurements" list. Having a dummy
+        "measurements" list here gives us consistency between the two
+        classes.
         """
-        self.measurements = [
-            RawScienceRow(
-                ABS_STEPS = self.MTR_ABS_STEPS,
-                SWIR_LOW = self.SWIR_LOW,
-                SWIR_MED = self.SWIR_MED,
-                SWIR_HIGH = self.SWIR_HIGH,
-                MWIR_LOW = self.MWIR_LOW,
-                MWIR_MED = self.MWIR_MED,
-                MWIR_HIGH = self.MWIR_HIGH,
-                SWIR_OFFSET = self.SWIR_OFFSET,
-                MWIR_OFFSET = self.MWIR_OFFSET,
-                HT_SINK_TEMP = self.HT_SINK_TEMP,
-                SWIR_TEMP = self.SWIR_TEMP
-            )
-        ]
+        super().__init__(**kwargs)
+        self.measurements = [ self ]
 
 class AckPacket(TmPacket):
-    template: ClassVar[PacketTemplate] = PacketTemplate(tm.ack_struct)
+    """An OB ACK packet."""
+    template: ClassVar[list[tuple[str, str]]] = tm.ack_struct
 
 class NackPacket(TmPacket):
-    template: ClassVar[PacketTemplate] = PacketTemplate(tm.nack)
+    """An OB NACK packet."""
+    template: ClassVar[list[tuple[str, str]]] = tm.nack

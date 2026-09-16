@@ -12,20 +12,15 @@ the subclass might wish to do.
 import tmstruct as tm
 from typing import ClassVar
 
-from packet_decoder import PacketDecoder, PacketTemplate
-from enfys_sciencedata import RawScienceRow
+from bitstruct_template_class import BitstructTemplateClass, BitstructTemplateException
 
+class TmPacketException(BitstructTemplateException):
+    pass
 
-class TmPacket(PacketDecoder):
-    """The base class for TMs.
-
-    This provides the generic primitives for decoding TM packets. Subclasses
-    should be pretty minimal, in general, just defining a typeId to match,
-    and an optional template and decode() method.
-    """
-
-    MAGIC: ClassVar[int] = 0x7C6EA12C
-    header_template: ClassVar[PacketTemplate] = PacketTemplate([
+class TmHeader(BitstructTemplateClass):
+    # Oddly, tmstruct doesn't have a broken out TM header described. I'll
+    # break my self-imposed rule and put it here.
+    template: ClassVar[list[tuple[str, str]]] = [
         ( "magic",         ">u32" ),
         ( "blockType",     ">u1" ),
         ( "tmCriticality", ">u2" ),
@@ -36,191 +31,143 @@ class TmPacket(PacketDecoder):
         ( "lobtInt",       ">u32" ),
         ( "lobtFrac",      ">u16" ),
         ( "blockLen",      ">u16" ),
-    ])
+    ]
+
+    lobt: float
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        if self.lobtInt is not None and self.lobtFrac is not None:
+            self.lobt = self.lobtInt + self.lobtFrac/65536.0
+
+class TmPacket(BitstructTemplateClass):
+    """The base class for TMs.
+
+    This provides the generic primitives for decoding TM packets. Subclasses
+    should be pretty minimal, in general, just defining a typeId to match,
+    and an optional template and decode() method.
+    """
+
+    MAGIC: ClassVar[int] = 0x7C6EA12C
+
+    header: TmHeader
 
     @classmethod
-    def frombinary(cls: "type[TmPacket]", packet: bytes) -> "TmPacket":
-        """Decode packet and return an object of the appropriate subclass."""
-        # Create an object of the base type.
-        tm = TmPacket()
-
-        # Too little data?
-        if len(packet) < tm.header_template.min_length_bytes:
-            raise ValueError("Packet is too short for TM header")
-
-        # Decode the TM header.
-        header = tm.header_template.decode(packet)
-
-        # Huh, it's not a TM header.
-        if header["magic"] != tm.MAGIC:
-            raise ValueError(f"Bad magic (0x{header['magic']:08x}), should be 0x{tm.MAGIC:08x}")
-
-        # Too little data?
-        if len(packet) < header["blockLen"] + tm.header_template.min_length_bytes:
-            raise ValueError("Packet data is too short for TM packet")
-
-        # Enough data, but is any excess purely made of padding bytes?
-        if not all(ent == 0xAA for ent in packet[header["blockLen"]+tm.header_template.min_length_bytes:]):
-            raise ValueError("Packet padding was not exclusively 0xAA")
-
-        tm.tmTypeId = header["tmTypeId"]
-        tm.seqFlag = header["seqFlag"]
-        tm.blockType = header["blockType"]
-        tm.tmCriticality = header["tmCriticality"]
-        tm.mmsDest = header["mmsDest"]
-        tm.instrId = header["instrId"]
-
-        # Decode the local onboard time.
-        tm.lobtInt = header["lobtInt"]
-        tm.lobtFrac = header["lobtFrac"]
-        tm.lobt = tm.lobtInt + tm.lobtFrac/65536.0
-
-        # Store the block length.
-        tm.blockLen = header["blockLen"]
-
-        # The "fields" attribute will contain the names of all
-        # fields derived from the decoded packet. I'm doing this
-        # as a dict because sets don't preserve key order.
-        tm.fields = {
-            "blockType": 1, "tmCriticality": 1, "mmsDest": 1,
-            "instrId": 1, "seqFlag": 1, "lobtInt": 1,
-            "lobtFrac": 1, "lobt": 1, "blockLen": 1,
-        }
-
-        cls._select_appropriate_subclass(tm, packet)
-
-        return tm
+    def frombinary(cls, data):
+        header = TmHeader(packet=data[:TmHeader.min_length_bytes])
+        if header.magic != cls.MAGIC:
+            raise TmPacketException("Incorrect packet magic number")
+        try:
+            return super().frombinary(data[:TmHeader.min_length_bytes + header.blockLen])
+        except BitstructTemplateException as e:
+            raise TmPacketException(f"No subclass accepted this packet (type ID={header.tmTypeId}, data length={header.blockLen})") from e
 
     @classmethod
-    def subclass_matcher(cls: "type[TmPacket]", tm: "TmPacket") -> bool:
-        """Given a subclass, indicate whether the subclass can handle the tm.
+    def strip_padding(cls, template: list[tuple[str, str]], name="PADDING"):
+        if template[-1][0] == name:
+            template.pop()
+        return template
 
-        For TM's, the determination is currently based on just the typeId.
-        """
-        return getattr(cls, "typeId", None) == tm.tmTypeId
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if "packet" in kwargs:
+            self.header = TmHeader(packet=kwargs["packet"][:TmHeader.min_length_bytes])
 
-    def __str__(self) -> str:
-        """Add the local onboard time to the basic string summary."""
-        return f"{self.typeName}: Time={self.lobt:.05f}"
+        if self.header is not None and self.header.tmTypeId != self.typeId:
+            raise TmPacketException("Type ID does not match")
 
 class HkPacket(TmPacket):
     """Base class for HK packets.
 
-    There are two typeIds which contain HK packets, so we define the
-    template and decode method here, but *don't* specify a typeId. We'll
-    subclass below for the specific type Ids.
+    There are two typeIds which contain HK packets, so we'll have a base
+    class, should we need anything extra, but use the derived classes
+    for decoding.
     """
 
-    template: ClassVar[PacketTemplate] = PacketTemplate(tm.eb_hk)
+    # FIXME - this shouldn't be needed 2026-09-16
+    strict_length_checking: ClassVar[bool] = False
 
-    def decode(self) -> None:
-        """Trim out the less useful fields"""
-
-        # The tmstruct definition duplicates header fields,
-        # and contains unused blocks. Let's delete those here
-        # so they don't turn up in automated exports. You can
-        # still pick them up as class attributes, but they
-        # won't turn up in the dict-style access.
-        for field in (
-            "PATTERN", "PACKET_ID", "LOBT_RET_TIME", "BLOCK_LENGTH",
-            "SPARES_BLOCK_1", "SPARES_BLOCK_2", "SPARES_BLOCK_3",
-            "SPARES_BLOCK_4", "SPARES_BLOCK_5", "SPARES_BLOCK_6",
-            "SPARES_BLOCK_7", "PADDING"
-        ):
-            del self.fields[field]
 
 class RegularHkPacket(HkPacket):
-    """Subclass for regular HKs.
-
-    This just inherits from HkPacket and specifies the relevant type Id.
-    """
-
+    """Subclass for regular HKs."""
+    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.eb_hk)
     typeId: ClassVar[int] = 0b000001
 
 class ResponseHkPacket(HkPacket):
-    """Subclass for response HKs.
-
-    This just inherits from HkPacket and specifies the relevant type Id.
-    """
-
+    """Subclass for response HKs."""
+    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.eb_hk)
     typeId: ClassVar[int] = 0b000010
-
-    def __str__(self):
-        return f"{self.typeName}: Time={self.lobt:.05f}, TCS_ACCEPTED={self.TCS_ACCEPTED}, TCS_REJECTED={self.TCS_REJECTED}"
 
 class PostHkPacket(TmPacket):
     """Subclass for power on self test HK."""
 
     typeId: ClassVar[int] = 0b000011
-    template: ClassVar[PacketTemplate] = PacketTemplate(tm.post_hk)
+    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.post_hk)
+
+    def __init__(self, **kwargs):
+        try:
+            super().__init__(**kwargs)
+        except Exception as e:
+            raise
 
 class DumpDataPacket(TmPacket):
     """Subclass for dump data packets."""
 
+    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.dump_data)
     typeId: ClassVar[int] = 0b000100
 
-    template: ClassVar[PacketTemplate] = PacketTemplate(tm.dump_data)
+class EbScienceRow(BitstructTemplateClass):
+    """A single row of science data"""
+    template: ClassVar[list[tuple[str, str]]] = tm.sci_data
+
+    # We'll be handing this the full array of data, so
+    # in most cases it's going to be too long.
+    strict_length_checking: ClassVar[bool] = False
 
 class ScienceDataPacket(TmPacket):
-    """Base class for science data packets.
+    """Base class for science packets.
 
-    There are two typeIds which contain science packets, so we define the
-    template and decode method here, but *don't* specify a typeId. We'll
-    subclass below for the specific type Ids.
+    There are two typeIds which contain science packets, so we'll have a base
+    class which handles commonality.
     """
 
-    template: ClassVar[PacketTemplate] = PacketTemplate(tm.eb_sci_header)
-    row_template: ClassVar[PacketTemplate] = PacketTemplate(tm.sci_data)
+    # Science data is variable-length, so we can't use strict checking.
+    strict_length_checking: ClassVar[bool] = False
 
-    def decode(self) -> None:
-        """Decode the science rows."""
+    measurements: list[EbScienceRow]
+    startTime: float
+    endTime: float
 
-        science_data = self.payload[self.template.min_length_bytes:]
-        self.fields["paddedMeasurementLength"] = 1
-        self.paddedMeasurementLength = len(science_data)
-        science_data = science_data.strip(b"\xAA")
-        self.fields["unPaddedMeasurementLength"] = 1
-        self.unPaddedMeasurementLength = len(science_data)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        self.fields["startTime"] = 1
-        self.startTime = self.START_TIME_S + self.START_TIME_MS / 1000
-        self.fields["endTime"] = 1
-        self.endTime = self.END_TIME_S + self.END_TIME_MS / 1000
+        if "packet" in kwargs:
+            # The science rows themselves need decoding. Run through the
+            # data, creating new EbScienceRow objects.
+            self.measurements = []
 
-        row_length = self.row_template.min_length_bits // 8
+            # Extract the part of the packet that should contain science
+            # rows. This should be a multiple of the row size. We get
+            # that check for free in EbScienceRow.frombinary, which will
+            # raise an exception if the last chunk of data is too short.
+            science = kwargs["packet"][self.min_length_bytes:self.header.blockLen]
+            while len(science) > 0:
+                # Extract the first row from the data, then strip it
+                # off the front.
+                self.measurements.append(EbScienceRow.frombinary(science))
+                science = science[EbScienceRow.min_length_bytes:]
 
-        self.measurements = []
-        self.fields["measurements"] = 1
-        while len(science_data) > 0:
-            self.measurements.append(RawScienceRow(*self.row_template.decode(science_data).values(), self.SWIR_OFFSET, self.MWIR_OFFSET))
-            science_data = science_data[row_length:]
-
-        # The tmstruct definition duplicates header fields,
-        # and contains unused blocks. Let's delete those here
-        # so they don't turn up in automated exports. You can
-        # still pick them up as class attributes, but they
-        # won't turn up in the dict-style access.
-        for field in (
-            "PATTERN", "PACKET_ID", "LOBT_RET_TIME", "BLOCK_LENGTH",
-            "START_TIME_S", "START_TIME_MS",
-            "END_TIME_S", "END_TIME_MS",
-            "RESERVED_0", "RESERVED_1",
-            "measurements"
-        ):
-            del self.fields[field]
-
-    def __str__(self) -> str:
-        """Add the local onboard time to the basic string summary."""
-        return f"{self.typeName}: Time={self.lobt:.05f}, Rows={len(self.measurements)}"
-
-
+            # Decode start and end times to floating point seconds.
+            self.startTime = self.START_TIME_S + self.START_TIME_MS / 1000
+            self.endTime = self.END_TIME_S + self.END_TIME_MS / 1000
 
 class ScienceDataCPacket(ScienceDataPacket):
     """Subclass for critical science packets.
 
     This just inherits from ScienceDataPacket and specifies the relevant type Id.
     """
-
+    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.eb_sci, name="SCI_DATA")
     typeId: ClassVar[int] = 0b000101
 
 class ScienceDataNcPacket(ScienceDataPacket):
@@ -228,6 +175,24 @@ class ScienceDataNcPacket(ScienceDataPacket):
 
     This just inherits from ScienceDataPacket and specifies the relevant type Id.
     """
-
+    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.eb_sci, name="SCI_DATA")
     typeId: ClassVar[int] = 0b000110
+
+import sys
+for line in sys.stdin:
+    line = line.strip()
+    try:
+        pkt = TmPacket.fromhex(line)
+
+        if isinstance(pkt, ScienceDataPacket):
+            m = pkt.measurements
+            pkt.measurements = len(m)
+            print(pkt)
+            print("Rows:")
+            for row in m:
+                print(row)
+    except TmPacketException as e:
+        print(f"Failed decode: {e}")
+        print(f"Hex was: {line}")
+        raise
 
