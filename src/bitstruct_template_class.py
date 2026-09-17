@@ -41,12 +41,15 @@ class BitstructTemplateClass:
     For convieninence, a "fields" attribute is provided. This is a dict
     whose keys are attribute names and values are (offset, size) tuples.
     The dict is populated using the template to identify the packet data
-    offset and bit size of each template entry. It will also contain 
-    entries for any type-hinted class attributes that aren't ClassVar hints.
+    offset and bit size of each template entry. It will also contain
+    entries for any type-hinted class attributes that aren't ClassVar hints
+    and are "simple" types (things you could reasonably expect to go
+    into a CSV or JSON file without causing problems).
+
     This allows you to build augmented subclasses (e.g. adding a timestamp
-    or further-decoded value) and have these further attributes identified 
+    or further-decoded value) and have these further attributes identified
     for e.g. automatic generation of CSV files. These extra .fields entries
-    take a value of (None, None) to indicate they're not present in packet 
+    take a value of (None, None) to indicate they're not present in packet
     data.
 
     Example usage:
@@ -59,6 +62,9 @@ class BitstructTemplateClass:
         print(decoded)
 
     """
+
+    # Things we'll allow to go into .fields
+    simple_types: typing.ClassVar[type] = (int, float, bool, str)
 
     start_byte: typing.ClassVar[int] = 0
     strict_length_checking: typing.ClassVar[bool] = True
@@ -75,7 +81,7 @@ class BitstructTemplateClass:
         """
 
         # If the subclass doesn't have a template then we can't do any of
-        # the below. Not necessarily an error - the subclass could be an 
+        # the below. Not necessarily an error - the subclass could be an
         # intermediate class.
         if not hasattr(cls, "template"):
             return
@@ -122,8 +128,8 @@ class BitstructTemplateClass:
             + (1 if cls.min_length_bits & 7 else 0)
         )
 
-        # We also run through the subclass's __annotations__. Any annotated
-        # fields that are present (but not template or start_byte) will also
+        # We also run through the subclass's type annotations. Any annotated
+        # fields that are present (but not ClassVar annotations) will also
         # be added to cls.fields, but with None as the offset and size. This
         # allows users to iterate over obj.fields.keys(). Useful if you're
         # doing automatic csv generation, for example.
@@ -131,7 +137,20 @@ class BitstructTemplateClass:
             if not hasattr(cls, name):
                 setattr(cls, name, None)
             if typing.get_origin(value) is not typing.ClassVar:
-                cls.fields[name] = (None, None)
+                # I am not absolutely sure this is the correct
+                # way of doing things, but it matches everything
+                # I've tried to do so far.
+
+                simple = False
+                try:
+                    for t in cls.simple_types:
+                        if issubclass(t, value):
+                            simple = True
+                            break
+                except TypeError:
+                    pass
+                if simple:
+                    cls.fields[name] = (None, None)
 
     def __init__(self, packet: bytes|None = None, **kwargs: typing.Any) -> None:
         """Class constructor.
@@ -153,7 +172,7 @@ class BitstructTemplateClass:
         """
         if packet is not None:
             # If a packet was supplied, check it's the right length before
-            # attempting a decode. 
+            # attempting a decode.
             if len(packet) < self.start_byte + self.min_length_bytes:
                 raise BitstructTemplateException("Packet too short")
 
@@ -222,7 +241,7 @@ class BitstructTemplateClass:
                 # We'll offer the data to each subclass, in turn, and
                 # the first one whose constructor accepts the data can
                 # have it. This does imply that constructors should be
-                # careful about what they accept. The base class 
+                # careful about what they accept. The base class
                 # constructor does length checking, but subclasses will
                 # likely need to do further checks.
                 try:
