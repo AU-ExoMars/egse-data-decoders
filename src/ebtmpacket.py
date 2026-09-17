@@ -9,10 +9,15 @@ is called after the template decoding, to perform any further decoding that
 the subclass might wish to do.
 """
 
+import binascii
 import tmstruct as tm
 from typing import ClassVar
 
 from bitstruct_template_class import BitstructTemplateClass, BitstructTemplateException
+
+# EB HKs embed an OB HK. If we decode that here, we
+# get CRC checking of the OB data for free.
+import obtmpacket
 
 class TmPacketException(BitstructTemplateException):
     pass
@@ -33,7 +38,7 @@ class TmHeader(BitstructTemplateClass):
         ( "blockLen",      ">u16" ),
     ]
 
-    lobt: float
+    lobt: float|None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -51,7 +56,13 @@ class TmPacket(BitstructTemplateClass):
 
     MAGIC: ClassVar[int] = 0x7C6EA12C
 
-    header: TmHeader
+    # It's sometimes useful to look at the packet that resulted
+    # in the data held by the class, for debugging.
+    raw: bytes|None = None
+    header: TmHeader|None = None
+    obHk: obtmpacket.HkPacket|None = None
+
+    lobt: float|None
 
     @classmethod
     def frombinary(cls, data):
@@ -59,7 +70,13 @@ class TmPacket(BitstructTemplateClass):
         if header.magic != cls.MAGIC:
             raise TmPacketException("Incorrect packet magic number")
         try:
-            return super().frombinary(data[:TmHeader.min_length_bytes + header.blockLen])
+            ret = super().frombinary(data[:TmHeader.min_length_bytes + header.blockLen])
+
+            # If no exception has been raised, store the raw packet
+            # data and return the object.
+            ret.raw = data
+
+            return ret
         except BitstructTemplateException as e:
             raise TmPacketException(f"No subclass accepted this packet (type ID={header.tmTypeId}, data length={header.blockLen})") from e
 
@@ -73,6 +90,7 @@ class TmPacket(BitstructTemplateClass):
         super().__init__(**kwargs)
         if "packet" in kwargs:
             self.header = TmHeader(packet=kwargs["packet"][:TmHeader.min_length_bytes])
+            self.lobt = self.header.lobt
 
         if self.header is not None and self.header.tmTypeId != self.typeId:
             raise TmPacketException("Type ID does not match")
@@ -85,9 +103,30 @@ class HkPacket(TmPacket):
     for decoding.
     """
 
-    # FIXME - this shouldn't be needed 2026-09-16
+    # FIXME - this shouldn't be needed, but there's a bug in both
+    # BSW and ASW which reports packet sizes incorrectly.
+    # Confirmed in 2026-09-17 mail from Ben.
     strict_length_checking: ClassVar[bool] = False
 
+    crc_valid: bool|None = None
+    calculated_crc: int|None = None
+    obHk: obtmpacket.HkPacket|None = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        if "packet" in kwargs:
+            # Validate CRCs
+            length = self.fields["HK_PACKET_CRC"][0] // 8
+            self.calculated_crc = self.crc16(kwargs["packet"][:length])
+            self.crc_valid = self.calculated_crc == self.HK_PACKET_CRC
+
+            self.obHk = obtmpacket.HkPacket.frombinary(
+                kwargs["packet"][self.fields["OB_HK_ID"][0]//8:1+self.fields["OB_HK_CRC8"][0]//8]
+            )
+
+    def crc16(self, data: bytes):
+        return binascii.crc_hqx(data, 0xFFFF)
 
 class RegularHkPacket(HkPacket):
     """Subclass for regular HKs."""
@@ -135,9 +174,9 @@ class ScienceDataPacket(TmPacket):
     # Science data is variable-length, so we can't use strict checking.
     strict_length_checking: ClassVar[bool] = False
 
-    measurements: list[EbScienceRow]
-    startTime: float
-    endTime: float
+    measurements: list[EbScienceRow] | None
+    startTime: float | None
+    endTime: float | None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -177,22 +216,4 @@ class ScienceDataNcPacket(ScienceDataPacket):
     """
     template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.eb_sci, name="SCI_DATA")
     typeId: ClassVar[int] = 0b000110
-
-import sys
-for line in sys.stdin:
-    line = line.strip()
-    try:
-        pkt = TmPacket.fromhex(line)
-
-        if isinstance(pkt, ScienceDataPacket):
-            m = pkt.measurements
-            pkt.measurements = len(m)
-            print(pkt)
-            print("Rows:")
-            for row in m:
-                print(row)
-    except TmPacketException as e:
-        print(f"Failed decode: {e}")
-        print(f"Hex was: {line}")
-        raise
 
