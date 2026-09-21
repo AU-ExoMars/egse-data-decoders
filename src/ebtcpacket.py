@@ -50,7 +50,7 @@ class TcRet(TcPacket):
         """
         super().__init__(**kwargs)
 
-        if "packet" in kwargs:
+        if "packet" in kwargs and packet is not None:
             self.ret = self.retSeconds + self.retFractional/65536.0
 
 class TcRequestHk(TcPacket):
@@ -86,7 +86,7 @@ class TcPatch(TcPacket):
         if self.variant is not None and self.variant != self.matchVariant:
             raise TcPacketException("Wrong patch variant")
 
-        if "packet" in kwargs:
+        if "packet" in kwargs and packet is not None:
             # Single variant has the data length specified in the header.
             self.patchPayload = kwargs["packet"][self.min_length_bytes:]
 
@@ -265,3 +265,7 @@ class TcSetTecCurrent(TcPacket):
     matchBlockId: ClassVar[int] = 0x68
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_tec_current
 
+
+if __name__ == "__main__":
+    test = TcRet(packet=None)
+    print(test)

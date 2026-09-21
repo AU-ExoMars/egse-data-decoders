@@ -88,7 +88,7 @@ class TmPacket(BitstructTemplateClass):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if "packet" in kwargs:
+        if "packet" in kwargs and packet is not None:
             self.header = TmHeader(packet=kwargs["packet"][:TmHeader.min_length_bytes])
             self.lobt = self.header.lobt
 
@@ -115,7 +115,7 @@ class HkPacket(TmPacket):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        if "packet" in kwargs:
+        if "packet" in kwargs and packet is not None:
             # Validate CRCs
             length = self.fields["HK_PACKET_CRC"][0] // 8
             self.calculated_crc = self.crc16(kwargs["packet"][:length])
@@ -181,7 +181,7 @@ class ScienceDataPacket(TmPacket):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        if "packet" in kwargs:
+        if "packet" in kwargs and packet is not None:
             # The science rows themselves need decoding. Run through the
             # data, creating new EbScienceRow objects.
             self.measurements = []

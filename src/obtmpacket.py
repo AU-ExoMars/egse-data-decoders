@@ -37,7 +37,7 @@ class TmPacket(BitstructTemplateClass):
         except Exception as e:
             raise
 
-        if "packet" in kwargs and self.crc_field_name is not None:
+        if "packet" in kwargs and packet is not None and self.crc_field_name is not None:
             # Validate CRC.
             crc_offset = self.fields[self.crc_field_name][0] // 8
 
