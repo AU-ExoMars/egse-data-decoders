@@ -252,13 +252,21 @@ class BitstructTemplateClass:
 
     @classmethod
     def frombinary(cls, data: bytes):
-        def _recursive_subclasses(cls: "type[BitstructTemplateClass]") -> set:
-            s = set()
+        def _recursive_subclasses(
+            cls: type[BitstructTemplateClass],
+            seen: set[type[BitstructTemplateClass]]|None = None
+        ) -> list[type[BitstructTemplateClass]]:
+            if seen is None:
+                seen = set()
+            elif cls in seen:
+                return []
+            seen.add(cls)
+            classes = [cls]
             for c in cls.__subclasses__():
-                s.add(c)
-                s = s.union(_recursive_subclasses(c))
-            return s
-        for c in [cls] + list(_recursive_subclasses(cls)):
+                classes += _recursive_subclasses(c, seen)
+            return classes
+
+        for c in _recursive_subclasses(cls):
             if hasattr(c, "template"):
                 # We'll offer the data to each subclass, in turn, and
                 # the first one whose constructor accepts the data can
