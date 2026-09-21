@@ -20,6 +20,7 @@ decode operations, such as:
 
 """
 import bitstruct
+import copy
 import typing
 
 class BitstructTemplateException(Exception):
@@ -152,12 +153,16 @@ class BitstructTemplateClass:
                 if simple:
                     cls.fields[name] = (None, None)
 
-    def __init__(self, packet: bytes|None = None, **kwargs: typing.Any) -> None:
+    def __init__(self, packet: bytes|None = None, src: "BitstructTemplateClass|None" = None, **kwargs: typing.Any) -> None:
         """Class constructor.
 
         If a packet is given, then the information derived from
         the class template string is used to decode it and populate
         attributes.
+
+        Otherwise, if a src is given, copy its inheritable attributes
+        over to self. This is used as a copy constructor for initialising
+        subclasses.
 
         Entries in kwargs are examined and used to fill out class
         attributes, allowing initialisation of "augmented" sub-classes.
@@ -170,6 +175,9 @@ class BitstructTemplateClass:
         received packet; an object from plain data (no supplied packet) and
         objects of e.g. further derived types.
         """
+        if packet is not None and src is not None:
+            raise RuntimeError("Only one of 'packet' and 'src' may be provided")
+
         if packet is not None:
             # If a packet was supplied, check it's the right length before
             # attempting a decode.
@@ -189,6 +197,13 @@ class BitstructTemplateClass:
             # Store the unpacked data into the class attributes.
             for i, value in enumerate(unpacked):
                 setattr(self, self.template[i][0], value)
+
+        elif src is not None:
+            if not isinstance(self, src.__class__):
+                raise BitstructTemplateException(f"src is not derived from {self.__class__.__name__}")
+            for f in src.__dict__:
+                if not f.startswith("__"):
+                    setattr(self, f, copy.deepcopy(getattr(src, f)))
 
         # If any kwargs have been supplied, examine them.
         for attr, value in kwargs.items():
@@ -298,7 +313,14 @@ if __name__ == "__main__":
         ]
         start_byte: typing.ClassVar[int] = 1
 
+    class SubBtcTest(BtcTest):
+        """Example subclass."""
+        extra: float|None = None
+
     # The "X" should be skipped because of start_byte.
     # "\x74" should decode to arg1=3, arg2=1, arg3=4
     t = BtcTest(b"X\x74")
     print(t)
+
+    s = SubBtcTest(src=t, extra=1)
+    print(s)
