@@ -199,10 +199,17 @@ class BitstructTemplateClass:
                 setattr(self, self.template[i][0], value)
 
         elif src is not None:
-            if not isinstance(self, src.__class__):
-                raise BitstructTemplateException(f"src is not derived from {self.__class__.__name__}")
+            # I originally checked that self was an instance of a class
+            # derived from src. But EB science rows have a different
+            # layout from OB science rows, which means they need to have
+            # different classes. We could fiddle with the class hierarchy
+            # to allow this, but Python does like its duck typing. So
+            # instead we'll just validate that self has all the attributes
+            # that src does.
             for f in src.__dict__:
                 if not f.startswith("__"):
+                    if f not in self.__dict__:
+                        raise BitstructTemplateException(f"src has attributes (e.g. {f}) not present in {self.__class__.__name__}")
                     setattr(self, f, copy.deepcopy(getattr(src, f)))
 
         # If any kwargs have been supplied, examine them.
