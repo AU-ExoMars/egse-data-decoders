@@ -4,36 +4,22 @@ import scipy
 import warnings
 import pt1000
 import pathlib
+import obtmpacket
 
-@dataclasses.dataclass
-class RawScienceRow:
-    """A data class to hold a row within the science data."""
+class TimestampedScienceRow(obtmpacket.ScienceDataPacket):
+    timestamp:            float|None
 
-    ABS_STEPS: int
-    SWIR_LOW: int
-    SWIR_MED: int
-    SWIR_HIGH: int
-    MWIR_LOW: int
-    MWIR_MED: int
-    MWIR_HIGH: int
-    SWIR_OFFSET: int
-    MWIR_OFFSET: int
-    HT_SINK_TEMP: int = dataclasses.field(default=None, kw_only=True)
-    SWIR_TEMP: int = dataclasses.field(default=None, kw_only=True)
-    timestamp: float = dataclasses.field(default=None, kw_only=True)
-
-@dataclasses.dataclass
-class ProcessedScienceRow(RawScienceRow):
-    swir_wavelength: float
-    swir_dn: float
-    mwir_wavelength: float
-    mwir_dn: float
-    swir_dark_subtracted: float = dataclasses.field(default=None, kw_only=True)
-    mwir_dark_subtracted: float = dataclasses.field(default=None, kw_only=True)
-    swir_relative: float = dataclasses.field(default=None, kw_only=True)
-    mwir_relative: float = dataclasses.field(default=None, kw_only=True)
-    heatsink_temperature: float = dataclasses.field(default=None, kw_only=True)
-    swir_temperature: float = dataclasses.field(default=None, kw_only=True)
+class ProcessedScienceRow(TimestampedScienceRow):
+    swir_wavelength:      float|None
+    swir_dn:              float|None
+    mwir_wavelength:      float|None
+    mwir_dn:              float|None
+    swir_dark_subtracted: float|None
+    mwir_dark_subtracted: float|None
+    swir_relative:        float|None
+    mwir_relative:        float|None
+    heatsink_temperature: float|None
+    swir_temperature:     float|None
 
 class EnfysScienceDataSet:
     """Base class"""

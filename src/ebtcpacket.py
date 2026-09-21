@@ -50,7 +50,7 @@ class TcRet(TcPacket):
         """
         super().__init__(**kwargs)
 
-        if "packet" in kwargs and packet is not None:
+        if kwargs.get("packet", None) is not None:
             self.ret = self.retSeconds + self.retFractional/65536.0
 
 class TcRequestHk(TcPacket):
@@ -86,7 +86,7 @@ class TcPatch(TcPacket):
         if self.variant is not None and self.variant != self.matchVariant:
             raise TcPacketException("Wrong patch variant")
 
-        if "packet" in kwargs and packet is not None:
+        if kwargs.get("packet", None) is not None:
             # Single variant has the data length specified in the header.
             self.patchPayload = kwargs["packet"][self.min_length_bytes:]
 

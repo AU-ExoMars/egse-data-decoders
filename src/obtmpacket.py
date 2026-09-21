@@ -37,7 +37,7 @@ class TmPacket(BitstructTemplateClass):
         except Exception as e:
             raise
 
-        if "packet" in kwargs and packet is not None and self.crc_field_name is not None:
+        if kwargs.get("packet", None) is not None and self.crc_field_name is not None:
             # Validate CRC.
             crc_offset = self.fields[self.crc_field_name][0] // 8
 
@@ -69,18 +69,6 @@ class ScienceDataPacket(TmPacket):
     """An OB science packet."""
     template: ClassVar[list[tuple[str, str]]] = tm.sci
     crc_field_name: ClassVar[str|None] = "CRC"
-
-    def __init__(self, **kwargs):
-        """Class constructor.
-
-        This is only present for compatibility with EB science data.
-        An EB science data packet can contain multiple rows of science
-        data, so we decode it into a "measurements" list. Having a dummy
-        "measurements" list here gives us consistency between the two
-        classes.
-        """
-        super().__init__(**kwargs)
-        self.measurements = [ self ]
 
 class AckPacket(TmPacket):
     """An OB ACK packet."""
