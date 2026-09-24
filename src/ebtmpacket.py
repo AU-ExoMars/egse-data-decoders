@@ -117,12 +117,12 @@ class HkPacket(TmPacket):
 
         if kwargs.get("packet", None) is not None:
             # Validate CRCs
-            length = self.fields["HK_PACKET_CRC"][0] // 8
+            length = self.byte_offset_of("HK_PACKET_CRC")
             self.calculated_crc = self.crc16(kwargs["packet"][:length])
             self.crc_valid = self.calculated_crc == self.HK_PACKET_CRC
 
             self.obHk = obtmpacket.HkPacket.frombinary(
-                kwargs["packet"][self.fields["OB_HK_ID"][0]//8:1+self.fields["OB_HK_CRC8"][0]//8]
+                kwargs["packet"][self.byte_offset_of("OB_HK_ID"):self.byte_offset_of("OB_HK_CRC8")+1]
             )
 
     def crc16(self, data: bytes):

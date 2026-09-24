@@ -113,7 +113,6 @@ class EnfysScienceDataSet:
                     "SWIR_MED", "SWIR_HIGH"
                 )
             except (ValueError, TypeError) as e:
-                warnings.warn(f"{self.name} swir_medium_to_high_model: {str(e)}")
                 pass
 
         if model_name in ("swir_low_to_medium_model", None):
@@ -122,7 +121,6 @@ class EnfysScienceDataSet:
                     "SWIR_LOW", "SWIR_MED"
                 )
             except (ValueError, TypeError) as e:
-                warnings.warn(f"{self.name} swir_low_to_medium_model: {str(e)}")
                 pass
 
         if model_name in ("mwir_medium_to_high_model", None):
@@ -131,7 +129,6 @@ class EnfysScienceDataSet:
                     "MWIR_MED", "MWIR_HIGH"
                 )
             except (ValueError, TypeError) as e:
-                warnings.warn(f"{self.name} mwir_medium_to_high_model: {str(e)}")
                 pass
 
         if model_name in ("mwir_low_to_medium_model", None):
@@ -140,7 +137,6 @@ class EnfysScienceDataSet:
                     "MWIR_LOW", "MWIR_MED"
                 )
             except (ValueError, TypeError) as e:
-                warnings.warn(f"{self.name} mwir_low_to_medium_model: {str(e)}")
                 pass
 
         # In the case where interpolators have already been created, they're
@@ -171,7 +167,6 @@ class EnfysScienceDataSet:
                 "SWIR_MED", "SWIR_HIGH", tune_intercept=self.swir_medium_to_high_model
             )[0]
         except (ValueError, TypeError) as e:
-            warnings.warn(f"{self.name} swir_medium_to_high_model: {str(e)}")
             pass
 
         try:
@@ -180,7 +175,6 @@ class EnfysScienceDataSet:
                 "SWIR_LOW", "SWIR_MED", tune_intercept=self.swir_low_to_medium_model
             )[0]
         except (ValueError, TypeError) as e:
-            warnings.warn(f"{self.name} swir_low_to_medium_model: {str(e)}")
             pass
 
         try:
@@ -189,7 +183,6 @@ class EnfysScienceDataSet:
                 "MWIR_MED", "MWIR_HIGH", tune_intercept=self.mwir_medium_to_high_model
             )[0]
         except (ValueError, TypeError) as e:
-            warnings.warn(f"{self.name} mwir_medium_to_high_model: {str(e)}")
             pass
 
         try:
@@ -198,7 +191,6 @@ class EnfysScienceDataSet:
                 "MWIR_LOW", "MWIR_MED", tune_intercept=self.mwir_low_to_medium_model
             )[0]
         except (ValueError, TypeError) as e:
-            warnings.warn(f"{self.name} mwir_low_to_medium_model: {str(e)}")
             pass
 
         # Invalidate interpolators.
@@ -241,7 +233,16 @@ class EnfysScienceDataSet:
             [ getattr(row, lower_attr), getattr(row, upper_attr) ]
             for row in self.raw_rows
         ])
+
+        if len(cal) < 3:
+            # Check both before and after filtering, since an
+            # empty list would cause an exception below.
+            return
+
         cal = cal[(cal[:,1] < self.max_usable_adc_value) & (cal[:,0] > 0)]
+
+        if len(cal) < 3:
+            return
 
         if tune_intercept is None:
             model, covar = scipy.optimize.curve_fit(
@@ -384,7 +385,7 @@ class EnfysScienceDataSet:
         if row.SWIR_TEMP is not None:
             swir_temperature = self.swir_pt1000(row.SWIR_TEMP)
 
-        return ProcessedScienceRow(**dataclasses.asdict(row),
+        return ProcessedScienceRow(src=row,
             swir_wavelength=self.steps_to_swir_wavelength(row.ABS_STEPS),
             mwir_wavelength=self.steps_to_mwir_wavelength(row.ABS_STEPS),
 

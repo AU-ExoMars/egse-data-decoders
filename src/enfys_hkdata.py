@@ -1,65 +1,23 @@
-import dataclasses
 import numpy as np
 import scipy
 import warnings
 import pt1000
 import pathlib
+import obtmpacket
 
-@dataclasses.dataclass
-class RawObHkRow:
-    """A data class to hold a row within the OB HK data."""
+class TimestampedObHkRow(obtmpacket.HkPacket):
+    timestamp:  float | None
 
-    MOD_ID: int
-    UNUSED1: int
-    CMD_ID: int
-    CMD_CNT: int
-    ERROR_BYTE: int
-    UNUSED2: int
-    ERROR_MTR: int
-    MTR_ERR_MSK_BYTE: int
-    MTR_FLAGS_BYTE: int
-    MTR_ABS_STEPS: int
-    MTR_REL_STEPS: int
-    UNUSED3: int
-    MTR_CURRENT: int
-    UNUSED4: int
-    MTR_GUARD_SELECT: int
-    MTR_CHOP: int
-    UNUSED5: int
-    MTR_SPEED: int
-    UNUSED6: int
-    PWR_STAT: int
-    THRM_STATUS_BYTE: int
-    THRM_MECH_OFF_SP: int
-    THRM_MECH_ON_SP: int
-    THRM_DET_OFF_SP: int
-    THRM_DET_ON_SP: int
-    SWIR_OFFSET: int
-    MWIR_OFFSET: int
-    HK_V_3V3: int
-    HK_V_1V5: int
-    DIGITAL_TRP: int
-    DETEC_TRP: int
-    MECH_TRP: int
-    MOTOR_TRP: int
-    HK_MECH_CUR: int
-    UNUSED_ADC: int
-    HK_SAMPLES: int
-    UNUSED7: int
-    CRC8: int
-    timestamp: float = dataclasses.field(default=None, kw_only=True)
-
-@dataclasses.dataclass
-class ProcessedObHkRow(RawObHkRow):
+class ProcessedObHkRow(TimestampedObHkRow):
     """HK row with added data decode"""
 
-    voltage_3v3: float = dataclasses.field(default=None, kw_only=True)
-    voltage_1v5: float = dataclasses.field(default=None, kw_only=True)
-    digital_temperature: float = dataclasses.field(default=None, kw_only=True)
-    detector_temperature: float = dataclasses.field(default=None, kw_only=True)
-    mechanism_temperature: float = dataclasses.field(default=None, kw_only=True)
-    motor_temperature: float = dataclasses.field(default=None, kw_only=True)
-    mechanism_current: float = dataclasses.field(default=None, kw_only=True)
+    voltage_3v3: float|None = None
+    voltage_1v5: float|None = None
+    digital_temperature: float|None = None
+    detector_temperature: float|None = None
+    mechanism_temperature: float|None = None
+    motor_temperature: float|None = None
+    mechanism_current: float|None = None
 
 class EnfysObHkDataSet:
     """Base class"""
@@ -137,7 +95,7 @@ class EnfysObHkDataSet:
 
         row = self.raw_rows[idx]
 
-        return ProcessedObHkRow(**dataclasses.asdict(row),
+        return ProcessedObHkRow(src=row,
             voltage_3v3 = row.HK_V_3V3 * self.voltage_3v3_slope,
             voltage_1v5 = row.HK_V_1V5 * self.voltage_1v5_slope,
             digital_temperature = self.digital_pt1000(row.DIGITAL_TRP),

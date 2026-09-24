@@ -39,7 +39,7 @@ class TmPacket(BitstructTemplateClass):
 
         if kwargs.get("packet", None) is not None and self.crc_field_name is not None:
             # Validate CRC.
-            crc_offset = self.fields[self.crc_field_name][0] // 8
+            crc_offset = self.byte_offset_of(self.crc_field_name)
 
             self.calculated_crc = self.crc8(kwargs["packet"][:crc_offset])
             self.crc_valid = getattr(self, self.crc_field_name) == self.calculated_crc
@@ -69,6 +69,10 @@ class ScienceDataPacket(TmPacket):
     """An OB science packet."""
     template: ClassVar[list[tuple[str, str]]] = tm.sci
     crc_field_name: ClassVar[str|None] = "CRC"
+
+    @property
+    def ABS_STEPS(self):
+        return self.MTR_ABS_STEPS
 
 class AckPacket(TmPacket):
     """An OB ACK packet."""
