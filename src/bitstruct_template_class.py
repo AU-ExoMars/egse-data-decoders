@@ -39,19 +39,15 @@ class BitstructTemplateClass:
     The class also provides a constructor which can decode packet data using
     the supplied template, populating the various attributes.
 
-    For convieninence, a "fields" attribute is provided. This is a dict
-    whose keys are attribute names and values are (offset, size) tuples.
-    The dict is populated using the template to identify the packet data
-    offset and bit size of each template entry. It will also contain
-    entries for any type-hinted class attributes that aren't ClassVar hints
-    and are "simple" types (things you could reasonably expect to go
-    into a CSV or JSON file without causing problems).
+    For convienience, a "fields" attribute is provided. This is a list of
+    attribute names whose types are "simple" (as defined in "simple_types"
+    below). The list is populated using the template information, along with
+    type-hinted class attributes that aren't ClassVar hints and are
+    also "simple" types.
 
     This allows you to build augmented subclasses (e.g. adding a timestamp
     or further-decoded value) and have these further attributes identified
-    for e.g. automatic generation of CSV files. These extra .fields entries
-    take a value of (None, None) to indicate they're not present in packet
-    data.
+    for e.g. automatic generation of CSV files.
 
     Example usage:
 
@@ -87,12 +83,9 @@ class BitstructTemplateClass:
         if not hasattr(cls, "template"):
             return
 
-        # I'm not convinced the offset and size info is actually
-        # all that useful. But it's easy to generate it here, and
-        # more difficult for a subclass to do it. So let's keep it
-        # for now. The main point is to have a dict indicating which
-        # fields are available.
-        cls.fields = {}
+        # Keep a record of sizes and offsets - subclasses may want
+        # to do stuff with the data (e.g. CRC calculation).
+        cls._fields = {}
 
         # We need to build the bitstruct format string from the template
         # definition.
@@ -113,13 +106,12 @@ class BitstructTemplateClass:
             # The size of this item will therefore be the size of the new
             # format string minus that of the previous one. I suspect I
             # could just use calcsize(fmt), but there may be wrinkles
-            # around e.g. endianness, so we'll do it this way. Again, maybe
-            # nothing will use offset_of and size_of, and I can just remove
-            # the whole thing!
+            # around e.g. endianness, so we'll do it this way.
             size = bitstruct.calcsize(cls.bitstruct_fmt) - offset
 
-            # Record bit offset and size information for this field.
-            cls.fields[name] = (offset, size)
+            # Record bit offset, size and "simple" information for this field.
+            # Anything from a template is simple by definition.
+            cls._fields[name] = (offset, size, True)
 
         # For later checking, we want to know how long of a packet is
         # needed.
@@ -131,8 +123,8 @@ class BitstructTemplateClass:
 
         # We also run through the subclass's type annotations. Any annotated
         # fields that are present (but not ClassVar annotations) will also
-        # be added to cls.fields, but with None as the offset and size. This
-        # allows users to iterate over obj.fields.keys(). Useful if you're
+        # be added to cls._fields, but with None as the offset and size. This
+        # allows users to iterate over obj.fields. Useful if you're
         # doing automatic csv generation, for example.
         for name, value in typing.get_type_hints(cls).items():
             if not hasattr(cls, name):
@@ -150,8 +142,7 @@ class BitstructTemplateClass:
                             break
                 except TypeError:
                     pass
-                if simple:
-                    cls.fields[name] = (None, None)
+                cls._fields[name] = (None, None, simple)
 
     def __init__(self, packet: bytes|None = None, src: "BitstructTemplateClass|None" = None, **kwargs: typing.Any) -> None:
         """Class constructor.
@@ -206,18 +197,17 @@ class BitstructTemplateClass:
             # to allow this, but Python does like its duck typing. So
             # instead we'll just validate that self has all the attributes
             # that src does.
-            for f in src.__dict__:
-                if not f.startswith("__"):
-                    if f not in self.__dict__:
-                        raise BitstructTemplateException(f"src has attributes (e.g. {f}) not present in {self.__class__.__name__}")
-                    setattr(self, f, copy.deepcopy(getattr(src, f)))
+            for name in src._fields:
+                if name not in self._fields:
+                        raise BitstructTemplateException(f"{src.type_name} has attributes (e.g. {name}) not present in {self.type_name}")
+                setattr(self, name, copy.deepcopy(getattr(src, name)))
 
         # If any kwargs have been supplied, examine them.
         for attr, value in kwargs.items():
             # If the attribute name isn't actually present in the class
             # "fields" list, raise an exception, rather than allowing
             # arbitrary members to be set via this avenue.
-            if attr not in self.fields:
+            if attr not in self._fields:
                 raise BitstructTemplateException(f"{attr} is not annotated or templated in this class")
 
             # Raise an exception if a packet was supplied and the
@@ -225,18 +215,38 @@ class BitstructTemplateClass:
             # the packet data.
             if (
                     packet is not None and
-                    attr in self.fields and
-                    self.fields[attr][0] is not None
+                    attr in self._fields and
+                    self._fields[attr][0] is not None
             ):
                 raise BitstructTemplateException(f"{attr} was specified both in packet and kwargs")
 
             # OK, everything looks OK, so set the class attribute.
             setattr(self, attr, value)
 
+    def bit_size_of(self, attr):
+        if attr not in self._fields:
+            raise RuntimeError(f"{attr} is not present in {self.type_name}")
+        return self._fields[attr][1]
+
+    def bit_offset_of(self, attr):
+        if attr not in self._fields:
+            raise RuntimeError(f"{attr} is not present in {self.type_name}")
+        return self._fields[attr][0]
+
+    def byte_offset_of(self, attr):
+        if attr not in self._fields:
+            raise RuntimeError(f"{attr} is not present in {self.type_name}")
+        return self._fields[attr][0] // 8
+
     @property
     def type_name(self) -> str:
         """Return the type name that this object ended up as."""
         return self.__class__.__name__
+
+    @property
+    def fields(self) -> list[str]:
+        """Return the list of "simple" fields."""
+        return [ name for name, info in self._fields.items() if info[2] ]
 
     @classmethod
     def fromhex(cls, hex_data: str) -> "BitstructTemplateClass":
@@ -293,11 +303,11 @@ class BitstructTemplateClass:
 
     def keys(self) -> list[str]:
         """Dict-style "keys()" method."""
-        return list(self.fields.keys())
+        return self.fields
 
     def values(self) -> list[typing.Any]:
         """Dict-style "values()" method."""
-        return [ getattr(self, key) for key in self.fields ]
+        return [ getattr(self, k) for k in self.fields ]
 
     def items(self) -> typing.Iterator[tuple[str, typing.Any]]:
         """Dict-style "items()" method."""
