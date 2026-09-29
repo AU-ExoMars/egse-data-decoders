@@ -112,7 +112,7 @@ class HkPacket(TmPacket):
 
     crc_valid: bool|None = None
     calculated_crc: int|None = None
-    obHk: obtmpacket.HkPacket|None = None
+    ob_hk: obtmpacket.HkPacket|None = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -123,9 +123,14 @@ class HkPacket(TmPacket):
             self.calculated_crc = self.crc16(kwargs["packet"][:length])
             self.crc_valid = self.calculated_crc == self.HK_PACKET_CRC
 
-            self.obHk = obtmpacket.HkPacket.frombinary(
-                kwargs["packet"][self.byte_offset_of("OB_HK_ID"):self.byte_offset_of("OB_HK_CRC8")+1]
-            )
+            # It's not absolutely obvious to me that the OB_* fields will
+            # definitely be populated once we're running ASW. Rather than
+            # using only CURRENT_OPERATING_STATE, let's also use the presence
+            # of all zeros in the relevant area of the packet as a signal.
+            if self.CURRENT_OPERATING_STATE in (4, 8):
+                obpacket = kwargs["packet"][self.byte_offset_of("OB_HK_ID"):self.byte_offset_of("OB_HK_CRC8")+1]
+                if sum(obpacket) != 0:
+                    self.ob_hk = obtmpacket.HkPacket.frombinary(obpacket)
 
     def crc16(self, data: bytes):
         return binascii.crc_hqx(data, 0xFFFF)
