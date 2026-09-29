@@ -59,8 +59,8 @@ class TmPacket(BitstructTemplateClass):
     # It's sometimes useful to look at the packet that resulted
     # in the data held by the class, for debugging.
     raw: bytes|None = None
+
     header: TmHeader|None = None
-    obHk: obtmpacket.HkPacket|None = None
 
     lobt: float|None
 
@@ -92,7 +92,7 @@ class TmPacket(BitstructTemplateClass):
             self.header = TmHeader(packet=kwargs["packet"][:TmHeader.min_length_bytes])
             self.lobt = self.header.lobt
 
-        if self.header is not None and self.header.tmTypeId != self.typeId:
+        if self.header is not None and (not hasattr(self, "typeId") or self.header.tmTypeId != self.typeId):
             raise TmPacketException("Type ID does not match")
 
 class HkPacket(TmPacket):
@@ -102,6 +102,8 @@ class HkPacket(TmPacket):
     class, should we need anything extra, but use the derived classes
     for decoding.
     """
+
+    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.eb_hk)
 
     # FIXME - this shouldn't be needed, but there's a bug in both
     # BSW and ASW which reports packet sizes incorrectly.
@@ -130,12 +132,10 @@ class HkPacket(TmPacket):
 
 class RegularHkPacket(HkPacket):
     """Subclass for regular HKs."""
-    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.eb_hk)
     typeId: ClassVar[int] = 0b000001
 
 class ResponseHkPacket(HkPacket):
     """Subclass for response HKs."""
-    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.eb_hk)
     typeId: ClassVar[int] = 0b000010
 
 class PostHkPacket(TmPacket):
@@ -153,8 +153,25 @@ class PostHkPacket(TmPacket):
 class DumpDataPacket(TmPacket):
     """Subclass for dump data packets."""
 
-    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.dump_data)
+    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.dump_data, "DUMP_DATA")
     typeId: ClassVar[int] = 0b000100
+
+    # Dump data is variable-length, so we can't use strict checking.
+    strict_length_checking: ClassVar[bool] = False
+
+    DUMP_DATA: bytes|None
+
+    def __init__(self, **kwargs):
+        try:
+            super().__init__(**kwargs)
+            if kwargs.get("packet", None) is not None:
+                if len(kwargs["packet"]) < self.header.min_length_bytes + self.header.blockLen:
+                    raise TmPacketException("Packet too short")
+                if len(kwargs["packet"]) > self.header.min_length_bytes + self.header.blockLen:
+                    raise TmPacketException("Packet too long")
+                self.DUMP_DATA = kwargs["packet"][self.min_length_bytes:]
+        except Exception as e:
+            raise
 
 class EbScienceRow(BitstructTemplateClass):
     """A single row of science data"""
