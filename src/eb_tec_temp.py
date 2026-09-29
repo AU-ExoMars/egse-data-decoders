@@ -56,7 +56,7 @@ class EbTecTemp:
         Given an ADC DN value, calculate the resistance of the thermistor.
         """
         if dn == 0 or dn == 65535:
-            raise ValueError(f"DN of 0 or 65535 implies zero resistance")
+            raise ValueError("DN of 0 or 65535 implies zero resistance")
 
         return self.r_upper*dn/(self.adc_maxval-dn)
 
