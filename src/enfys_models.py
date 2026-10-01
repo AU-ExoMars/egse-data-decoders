@@ -1,5 +1,5 @@
 from enfys_sciencedata import EnfysScienceDataSet
-from enfys_hkdata import EnfysObHkDataSet
+from enfys_hkdata import EnfysObHkDataSet, EnfysEbHkDataSet
 from egse_extensions import EbEgseExtensions, ObEgseExtensions
 from pt1000 import PT1000
 
@@ -93,3 +93,9 @@ class EMObHkDataSet(EnfysObHkDataSet):
     voltage_3v3_slope = 1.2231e-4
     voltage_1v5_slope = 6.1367e-5
     mech_current_slope = 3.7531e-3
+
+#class BB2EbHkDataSet(EnfysEbHkDataSet):
+#    pass
+#
+#class EMEbHkDataSet(EnfysEbHkDataSet):
+#    pass

@@ -6,7 +6,7 @@ import pathlib
 import obtmpacket
 
 class TimestampedObHkRow(obtmpacket.HkPacket):
-    timestamp:  float | None
+    timestamp: float|None
 
 class ProcessedObHkRow(TimestampedObHkRow):
     """HK row with added data decode"""
@@ -105,3 +105,23 @@ class EnfysObHkDataSet:
             mechanism_current = row.HK_MECH_CUR * self.mech_current_slope
         )
 
+class ProcessedEbHkRow(ebtmpacket.HkPacket):
+    processed_ob_hk: ProcessedObHkRow|None
+    
+    voltage_plus_12v: float|None = None
+    voltage_minus_12v: float|None = None
+    voltage_5v: float|None = None
+    voltage_3v3: float|None = None
+    voltage_tec_rail: float|None = None
+    tec_drive_current: float|None = None
+
+    tec_setpoint_temperature: float|None = None
+    mcu_internal_temperature: float|None = None
+    peltier_temperature: float|None = None
+    internal_trp_temperature: float|None = None
+    psu_board_temperature: float|None = None
+
+    pass
+
+class EnfysEbHkDataSet:
+    pass

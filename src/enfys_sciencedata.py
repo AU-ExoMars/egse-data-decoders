@@ -21,6 +21,79 @@ class ProcessedScienceRow(TimestampedScienceRow):
     heatsink_temperature: float|None
     swir_temperature:     float|None
 
+    def __init__(self, calibration: EnfysCalibration|None = None, **kwargs):
+        super().__init__(**kwargs)
+
+        # No calibration supplied, or no science data present.
+        if calibration is None or self.ABS_STEPS is None:
+            return
+
+        self.swir_wavelength = self.ABS_STEPS*calibration.swir_wavelength_model[0] + calibration.swir_wavelength_model[1]
+        self.mwir_wavelength = self.ABS_STEPS*calibration.mwir_wavelength_model[0] + calibration.mwir_wavelength_model[1]
+
+        # Calculate a SWIR DN value on the "HIGH" scale, based on the best
+        # available resolution.
+        if self.SWIR_HIGH < calibration.max_usable_adc_value:
+            self.swir_dn = self.SWIR_HIGH
+        elif self.SWIR_MED < calibration.max_usable_adc_value:
+            self.swir_dn = gain_function(self.SWIR_MED, *calibration.swir_medium_to_high_model)
+        else:
+            self.swir_dn = gain_function(
+                gain_function(self.SWIR_LOW, *calibration.swir_low_to_medium_model),
+                *calibration.swir_medium_to_high_model
+            )
+        self.swir_dn -= calibration.swir_chop_target
+
+        # Calculate a MWIR DN value on the "HIGH" scale, based on the best
+        # available resolution.
+        if self.MWIR_HIGH < calibration.max_usable_adc_value:
+            self.mwir_dn = self.MWIR_HIGH
+        elif self.MWIR_MED < calibration.max_usable_adc_value:
+            self.mwir_dn = gain_function(self.MWIR_MED, *calibration.mwir_medium_to_high_model)
+        else:
+            self.mwir_dn = gain_function(
+                gain_function(self.MWIR_LOW, *calibration.mwir_low_to_medium_model),
+                *calibration.mwir_medium_to_high_model
+            )
+        self.mwir_dn -= calibration.mwir_chop_target
+
+        # The two temperature sensors.
+        self.heatsink_temperature = calibration.heatsink_pt1000(self.HT_SINK_TEMP)
+        self.swir_temperature = calibration.swir_pt1000(self.SWIR_TEMP)
+
+        if calibration.dark is None:
+            # No "dark" calibration supplied, so we can't do any further processing.
+            return
+
+        self.swir_dark_subtracted = self.swir_dn - calibration.dark.swir_interpolator(self.ABS_STEPS)
+        self.mwir_dark_subtracted = self.mwir_dn - calibration.dark.mwir_interpolator(self.ABS_STEPS)
+
+        if calibration.flat is None:
+            # No "flat" calibration supplied, so we can't do any further processing.
+            return
+
+        # Take some care here.
+        flatval = calibration.flat.swir_interpolator(self.ABS_STEPS)-calibration.dark.swir_interpolator(self.ABS_STEPS)
+        if self.swir_dark_subtracted <= 0:
+            # If the dark-adjusted value is darker than dark, then
+            # the relative value should be zero.
+            self.swir_relative = 0
+        elif self.swir_dark_subtracted > flatval/calibration.flat_reflectivity:
+            # If the dark-adjusted value is brighter than the flat
+            # value when adjusted for the flat's reflectivity, the
+            # relative value should be unity.
+            self.swir_relative = 1
+        else:
+            self.swir_relative = self.swir_dark_subtracted*calibration.flat_reflectivity/flatval
+
+        flatval = calibration.flat.mwir_interpolator(self.ABS_STEPS)-calibration.dark.mwir_interpolator(self.ABS_STEPS)
+        if self.mwir_dark_subtracted <= 0:
+            self.mwir_relative = 0
+        elif self.mwir_dark_subtracted > flatval/calibration.flat_reflectivity:
+            self.mwir_relative = 1
+        else:
+            self.mwir_relative = self.mwir_dark_subtracted*calibration.flat_reflectivity/flatval
+
 class EnfysScienceDataSet:
     """Base class"""
 
