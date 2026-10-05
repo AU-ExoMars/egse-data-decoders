@@ -1,0 +1,201 @@
+#!/usr/bin/env -S jinjacat
+---
+# See https://github.com/gw1urf/jinjacat for how this gets processed
+# to a diagram.
+#
+# Special case - if your frontmatter contains a "pipe" key,
+# then jinjacat will pass its output through the supplied
+# shell command.
+#
+# jinjacat will also set "stdout" to its sys.stdout file descriptor.
+# With expansion of jinja in frontmatter tags, this lets you detect
+# whether you're sending to a terminal and modify the pipe command.
+postproc: unflatten | dot -Tpng
+display: feh --scale-down -g 2560x720 -Z -
+pipe: "{{ postproc }}{% if stdout.isatty() %} | {{display}}{% endif %}"
+
+calibration: cyan
+science_data: yellow
+processed_eb_hk: orange
+processed_ob_hk: darkorange
+raw_eb: seagreen
+raw_ob: darkseagreen
+uses: green
+contains: red
+---
+digraph classes {
+    graph [ dpi=300 ];
+    size = "8x12";
+    newrank=true;
+    layout=dot;
+
+    rankdir=BT
+
+    BitstructTemplateClass;
+    dataclass;
+
+    subgraph key {
+        cluster=true;
+        // Go figure!
+        labelloc = "t";
+        labeljust = "l";
+        label="
+        Black arrows are an \"is a\" relationship.
+        Dashed arrows are a \"is one of\" relationship.
+        {{uses|capitalize}} arrows are a \"uses\" relationship.
+        {{contains|capitalize}} arrows are a \"contains a/some\" relationship.
+        ";
+        rank=same;
+        cal [label="Instrument\nCalibration Data", fillcolor="{{calibration}}", style=filled];
+        sdp [label="Processed\nScience Data", fillcolor="{{science_data}}", style=filled];
+        ebhkp [label="Processed\nEB HK Data", fillcolor="{{processed_eb_hk}}", style=filled];
+        obhkp [label="Processed\nOB HK Data", fillcolor="{{processed_ob_hk}}", style=filled];
+        ebraw [label="Raw EB\nTM data", fillcolor="{{raw_eb}}", style=filled];
+        obraw [label="Raw OB\nTM data", fillcolor="{{raw_ob}}", style=filled];
+    }
+
+    subgraph cluster_calibration {
+        node [fillcolor="{{calibration}}", style=filled];
+        style=invis;
+
+        subgraph calbase {
+            rank=same;
+            EbCalibration;
+            ObCalibration;
+        }
+        subgraph calsub {
+            rank=same;
+            EbCalibrationEM;
+            EbCalibrationDEM;
+            EbCalibrationFM;
+            ObCalibrationBB2;
+            ObCalibrationEM;
+        }
+    }
+
+    subgraph sciencedata {
+        cluster=true;
+        style=invis;
+        node [fillcolor="{{science_data}}", style=filled];
+        ScienceRow;
+        TimestampedScienceRow;
+        ProcessedScienceRow;
+        ScienceDataSet;
+    }
+
+    subgraph ebhkdata {
+        node [fillcolor="{{processed_eb_hk}}", style=filled];
+        cluster=true;
+        style=invis;
+        EbProcessedHk;
+        EbHkDataSet;
+    }
+
+    subgraph obhkdata {
+        cluster=true;
+        style=invis;
+        node [fillcolor="{{processed_ob_hk}}", style=filled];
+        ObTimestampedHk;
+        ObProcessedHk;
+        ObHkDataSet;
+    }
+
+    subgraph OB {
+        cluster=true;
+        style=invis;
+        node [fillcolor="{{raw_ob}}", style=filled];
+        ObTmPacket;
+        ObHkPacket;
+        ObScienceDataPacket;
+        ObAckPacket;
+        ObNackPacket;
+    }
+
+    subgraph EB {
+        cluster=true;
+        style=invis;
+        node [fillcolor="{{raw_eb}}", style=filled];
+        EbTmHeader;
+        EbScienceRow;
+
+        EbTmPacket;
+
+        EbHkPacket;
+        EbPostHkPacket;
+
+        EbRegularHkPacket;
+        EbResponseHkPacket;
+
+        EbDumpDataPacket;
+
+        EbScienceDataPacket;
+        EbScienceDataCPacket;
+        EbScienceDataNcPacket;
+    }
+
+    // Calibration data for the various instruments.
+    EbCalibration -> dataclass;
+    EbCalibrationEM -> EbCalibration;
+    EbCalibrationDEM -> EbCalibration;
+    EbCalibrationFM -> EbCalibration;
+
+    ObCalibration -> dataclass;
+    ObCalibrationBB2 -> ObCalibration;
+    ObCalibrationEM -> ObCalibration;
+
+    // Collections of processed data.
+
+    // OB HK data.
+    ObTimestampedHk -> ObHkPacket;
+    ObProcessedHk -> ObTimestampedHk;
+    ObHkDataSet -> ObProcessedHk [color={{contains}}];
+    ObHkDataSet -> ObProcessedHk [color={{contains}}];
+    ObHkDataSet -> ObProcessedHk [color={{contains}}];
+    ObProcessedHk -> { ObCalibrationBB2, ObCalibrationEM } [color={{uses}}];
+
+    // EB HK data.
+    EbHkDataSet -> EbProcessedHk [color={{contains}}];
+    EbHkDataSet -> EbProcessedHk [color={{contains}}];
+    EbHkDataSet -> EbProcessedHk [color={{contains}}];
+    EbProcessedHk -> { EbResponseHkPacket, EbRegularHkPacket } [style=dashed];
+    EbProcessedHk -> ObProcessedHk [color={{contains}}];
+    EbProcessedHk -> { EbCalibrationEM, EbCalibrationDEM, EbCalibrationFM } [color={{uses}}];
+
+    // OB or EB science data.
+    ScienceRow-> { EbScienceRow, ObScienceDataPacket } [style=dashed]
+    ScienceDataSet -> ProcessedScienceRow [color={{contains}}];
+    ScienceDataSet -> ProcessedScienceRow [color={{contains}}];
+    ScienceDataSet -> ProcessedScienceRow [color={{contains}}];
+    TimestampedScienceRow -> ScienceRow;
+    ProcessedScienceRow -> TimestampedScienceRow;
+    ProcessedScienceRow -> { ObCalibrationBB2, ObCalibrationEM } [color={{uses}}];
+
+    // Serial packets from the OB.
+    ObTmPacket -> BitstructTemplateClass
+    ObScienceDataPacket -> ObTmPacket;
+    ObHkPacket -> ObTmPacket;
+    ObAckPacket -> ObTmPacket;
+    ObNackPacket -> ObTmPacket;
+
+
+    // Serial packets from the EB.
+    EbTmHeader->BitstructTemplateClass;
+    EbTmPacket->BitstructTemplateClass;
+    EbScienceRow->BitstructTemplateClass;
+
+    EbHkPacket -> EbTmPacket;
+    EbPostHkPacket -> EbTmPacket;
+    EbDumpDataPacket -> EbTmPacket;
+    EbScienceDataPacket -> EbTmPacket;
+    EbScienceDataPacket -> EbScienceRow [color={{contains}}];
+    EbScienceDataPacket -> EbScienceRow [color={{contains}}];
+    EbScienceDataPacket -> EbScienceRow [color={{contains}}];
+    EbTmPacket -> EbTmHeader [color={{contains}}];
+    EbHkPacket -> ObHkPacket [color={{contains}}];
+
+    EbRegularHkPacket -> EbHkPacket;
+    EbResponseHkPacket -> EbHkPacket;
+
+    EbScienceDataCPacket -> EbScienceDataPacket;
+    EbScienceDataNcPacket -> EbScienceDataPacket;
+}
