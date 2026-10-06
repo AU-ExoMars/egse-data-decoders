@@ -146,4 +146,4 @@ class Pt1000Model(FittableModel):
 
     def __str__(self) -> str:
         """Return a representation of the object."""
-        return f"{self.__class__.__name__}(r_0={self.r_0}, r_upper={self.r_upper})"
+        return f"{self.__class__.__name__}(r_0={self.r_0}, r_upper={self.r_upper}, adc_bits={self.adc_bits})"

@@ -50,14 +50,15 @@ class TecThermistorModel(FittableModel):
         :param r_upper: The resistance of the top half of the potential divider.
         :param adc_bits: The resolution of the ADC, in bits.
         """
-        self.adc_maxval = (1 << adc_bits)-0.5
+        # Pass r_upper up to FittableModel.
+        super().__init__(r_upper = r_upper)
+
+        self.adc_bits = adc_bits
+        self.adc_maxval = (1 << adc_bits)-1
 
         self.A = 1.364e-4
         self.B = -3.758e-02
         self.C = 8.153
-
-        # Pass r_upper up to FittableModel.
-        super().__init__(r_upper = r_upper)
 
     def dn_to_r(self, dn: int|np.ndarray) -> float|np.ndarray:
         """Convert from DN to thermistor resistance.
@@ -66,9 +67,9 @@ class TecThermistorModel(FittableModel):
         """
         if (
              (isinstance(dn, np.ndarray) and
-                (np.any(dn < 1) or np.any(dn > self.adc_maxval))) or
+                (np.any(dn < 1) or np.any(dn >= self.adc_maxval))) or
              (not isinstance(dn, np.ndarray)
-                and (dn < 1 or dn > self.adc_maxval))
+                and (dn < 1 or dn >= self.adc_maxval))
         ):
             raise ValueError("DN of 0 or maxval implies zero resistance")
 
@@ -134,3 +135,6 @@ class TecThermistorModel(FittableModel):
         the expected DN value.
         """
         return self.r_to_dn(self.t_to_r(t))
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(r_upper={self.r_upper}, adc_bits={self.adc_bits})"
