@@ -5,11 +5,10 @@
 # just scalars.
 import numpy as np
 
-# The "refine_calibration" method uses scipy.optimize.
-import scipy
+from .fittable import FittableModel
 
 
-class PT1000:
+class Pt1000Model(FittableModel):
     """Encapsulate a PT1000 temperature sensor connected to an ADC.
 
     This class represents a PT1000 temperature sensor connected as the
@@ -52,6 +51,15 @@ class PT1000:
     metal oxide SMD resistor is typically around 5ppm, which is low enough
     to be negligible.
 
+    Neither resistor is likely to be perfectly on spec and, even with a 1%
+    upper and 5% PT1000 tolerance, this can translate to errors in excess of
+    10 degrees. The calibration process attempts to optimise the value of
+    r_0 to improve the model's fit to the data.
+
+    r_upper does *not* get modified by this process since, for each possible
+    value for r_upper, there's a corresponding value for r_0 which gives the
+    same overall error value. Allowing both to vary could allow arbitrarily
+    unrealistic values for r_upper and r_0 to be selected.
     """
 
     def __init__(self,
@@ -72,8 +80,11 @@ class PT1000:
 
         self.adc_maxval = (1 << adc_bits)-1
 
-        self.r_0 = r_0
         self.r_upper = r_upper
+
+        # Fitting only tweaks r_0, so that's all we tell
+        # FittableModel about.
+        super().__init__(r_0 = r_0)
 
     def dn_to_r(self, dn: int) -> float:
         """Convert from DN to PT1000 resistance.
@@ -117,7 +128,7 @@ class PT1000:
         """
         return self.r_to_t(self.dn_to_r(dn))
 
-    def __call__(self, dn: int) -> float:
+    def __call__(self, dn: int|np.ndarray) -> float:
         """Convert a DN value to a temperature.
 
         This is just a thin wrapper around dn_to_t, allowing the object
@@ -133,50 +144,6 @@ class PT1000:
         """
         return self.r_to_dn(self.t_to_r(t))
 
-    def refine_calibration(self,
-        dn_values: list[int],
-        temperature_values: list[float],
-    ) -> tuple[float, float, float]:
-        """Refine the calibration value r_0.
-
-        Neither resistor is likely to be perfectly on spec and,
-        even with a 1% upper and 5% PT1000 tolerance, this can
-        translate to errors in excess of 10 degrees. This method
-        takes arrays of DN and temperature values and attempts to
-        refine the value of r_0 to improve the model's fit to the data.
-
-        r_upper does *not* get modified by this refinement since, for
-        each possible value for r_upper, there's a corresponding value
-        for r_0 which gives the same overall error value. Allowing
-        both to vary could allow arbitrarily unrealistic values for
-        r_upper and r_0 to be selected.
-
-        Once calibrated, the value of the object's r_0 attribute
-        will be that found to give the optimum fit. The method also
-        returns this value, along with the RMS error of prediction
-        for the supplied data.
-
-        It's not expected that you'd run this function very often -
-        typically you'd use it to characterise a sensor, and then
-        retain the generated values for future use.
-
-        :param dn_values: List (or numpy vector) of ADC DN values.
-        :param temperature_values: Corresponding temperatures.
-        """
-
-        model, covar = scipy.optimize.curve_fit(
-            self._calibration_estimator,
-            np.array(dn_values),
-            np.array(temperature_values)
-        )
-
-        self.r_0 = model[0]
-
-        error = np.sqrt(sum((temperature_values-self.dn_to_t(dn_values))**2)/dn_values.shape[0])
-
-        return self.r_0, error
-
-    def _calibration_estimator(self, x: float, r_0: float) -> float:
-        self.r_0 = r_0
-        return self.dn_to_t(x)
-
+    def __str__(self) -> str:
+        """Return a representation of the object."""
+        return f"{self.__class__.__name__}(r_0={self.r_0}, r_upper={self.r_upper})"
