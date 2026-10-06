@@ -1,7 +1,7 @@
 """Classes for decoding Telemetry packets.
 
-The base class, TmPacket, does most of the work. Subclasses are defined for
-the various packet types, and TmPacket.frombinary() will return an object of
+The base class, ObTmPacket, does most of the work. Subclasses are defined for
+the various packet types, and ObTmPacket.frombinary() will return an object of
 the appropriate class for the decoded packet. The subclasses each define
 a template which defines how to decode the packet data into class attributes
 and, optionally, a decode() method, which is called after the template
@@ -13,10 +13,10 @@ from typing import ClassVar
 
 from bitstruct_template_class import BitstructTemplateClass, BitstructTemplateException
 
-class TmPacketException(BitstructTemplateException):
+class ObTmPacketException(BitstructTemplateException):
     pass
 
-class TmPacket(BitstructTemplateClass):
+class ObTmPacket(BitstructTemplateClass):
     """Base class for TM packets from the OB.
 
     This class doesn't do anything except give us somewhere that we can
@@ -60,12 +60,12 @@ class TmPacket(BitstructTemplateClass):
                     crc ^= 0x107
         return crc
 
-class HkPacket(TmPacket):
+class ObHkPacket(ObTmPacket):
     """An OB HK packet."""
     template: ClassVar[list[tuple[str, str]]] = tm.hk
     crc_field_name: ClassVar[str|None] = "CRC8"
 
-class ScienceDataPacket(TmPacket):
+class ObScienceDataPacket(ObTmPacket):
     """An OB science packet."""
     template: ClassVar[list[tuple[str, str]]] = tm.sci
     crc_field_name: ClassVar[str|None] = "CRC"
@@ -74,11 +74,11 @@ class ScienceDataPacket(TmPacket):
     def ABS_STEPS(self):
         return self.MTR_ABS_STEPS
 
-class AckPacket(TmPacket):
+class ObAckPacket(ObTmPacket):
     """An OB ACK packet."""
     template: ClassVar[list[tuple[str, str]]] = tm.ack_struct
     crc_field_name: ClassVar[str|None] = "CRC8"
 
-class NackPacket(TmPacket):
+class ObNackPacket(ObTmPacket):
     """An OB NACK packet."""
     template: ClassVar[list[tuple[str, str]]] = tm.nack

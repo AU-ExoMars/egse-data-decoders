@@ -1,7 +1,7 @@
 """Classes for decoding Telemetry packets.
 
-The base class, TmPacket, does most of the work. Subclasses are defined for
-the various packet types, and TmPacket.frombinary() will return an object of
+The base class, EbTmPacket, does most of the work. Subclasses are defined for
+the various packet types, and EbTmPacket.frombinary() will return an object of
 the appropriate class for the decoded packet. The subclasses each define
 the packet typeId they inhabit, a template which defines how to decode the
 packet data into class attributes and, optionally, a decode() method, which
@@ -17,12 +17,12 @@ from bitstruct_template_class import BitstructTemplateClass, BitstructTemplateEx
 
 # EB HKs embed an OB HK. If we decode that here, we
 # get CRC checking of the OB data for free.
-import obtmpacket
+from ob_tm_packet import ObHkPacket
 
-class TmPacketException(BitstructTemplateException):
+class EbTmPacketException(BitstructTemplateException):
     pass
 
-class TmHeader(BitstructTemplateClass):
+class EbTmHeader(BitstructTemplateClass):
     # Oddly, tmstruct doesn't have a broken out TM header described. I'll
     # break my self-imposed rule and put it here.
     template: ClassVar[list[tuple[str, str]]] = [
@@ -46,7 +46,7 @@ class TmHeader(BitstructTemplateClass):
         if self.lobtInt is not None and self.lobtFrac is not None:
             self.lobt = self.lobtInt + self.lobtFrac/65536.0
 
-class TmPacket(BitstructTemplateClass):
+class EbTmPacket(BitstructTemplateClass):
     """The base class for TMs.
 
     This provides the generic primitives for decoding TM packets. Subclasses
@@ -60,17 +60,17 @@ class TmPacket(BitstructTemplateClass):
     # in the data held by the class, for debugging.
     raw: bytes|None = None
 
-    header: TmHeader|None = None
+    header: EbTmHeader|None = None
 
     lobt: float|None
 
     @classmethod
     def frombinary(cls, data):
-        header = TmHeader(packet=data[:TmHeader.min_length_bytes])
+        header = EbTmHeader(packet=data[:EbTmHeader.min_length_bytes])
         if header.magic != cls.MAGIC:
-            raise TmPacketException("Incorrect packet magic number")
+            raise EbTmPacketException("Incorrect packet magic number")
         try:
-            ret = super().frombinary(data[:TmHeader.min_length_bytes + header.blockLen])
+            ret = super().frombinary(data[:EbTmHeader.min_length_bytes + header.blockLen])
 
             # If no exception has been raised, store the raw packet
             # data and return the object.
@@ -78,7 +78,7 @@ class TmPacket(BitstructTemplateClass):
 
             return ret
         except BitstructTemplateException as e:
-            raise TmPacketException(f"No subclass accepted this packet (type ID={header.tmTypeId}, data length={header.blockLen})") from e
+            raise EbTmPacketException(f"No subclass accepted this packet (type ID={header.tmTypeId}, data length={header.blockLen})") from e
 
     @classmethod
     def strip_padding(cls, template: list[tuple[str, str]], name="PADDING"):
@@ -89,13 +89,13 @@ class TmPacket(BitstructTemplateClass):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if kwargs.get("packet", None) is not None:
-            self.header = TmHeader(packet=kwargs["packet"][:TmHeader.min_length_bytes])
+            self.header = EbTmHeader(packet=kwargs["packet"][:EbTmHeader.min_length_bytes])
             self.lobt = self.header.lobt
 
         if self.header is not None and (not hasattr(self, "typeId") or self.header.tmTypeId != self.typeId):
-            raise TmPacketException("Type ID does not match")
+            raise EbTmPacketException("Type ID does not match")
 
-class HkPacket(TmPacket):
+class EbHkPacket(EbTmPacket):
     """Base class for HK packets.
 
     There are two typeIds which contain HK packets, so we'll have a base
@@ -103,7 +103,7 @@ class HkPacket(TmPacket):
     for decoding.
     """
 
-    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.eb_hk)
+    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_hk)
 
     # FIXME - this shouldn't be needed, but there's a bug in both
     # BSW and ASW which reports packet sizes incorrectly.
@@ -112,7 +112,7 @@ class HkPacket(TmPacket):
 
     crc_valid: bool|None = None
     calculated_crc: int|None = None
-    ob_hk: obtmpacket.HkPacket|None = None
+    ob_hk: ObHkPacket|None = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -130,24 +130,24 @@ class HkPacket(TmPacket):
             if self.CURRENT_OPERATING_STATE in (4, 8):
                 obpacket = kwargs["packet"][self.byte_offset_of("OB_HK_ID"):self.byte_offset_of("OB_HK_CRC8")+1]
                 if sum(obpacket) != 0:
-                    self.ob_hk = obtmpacket.HkPacket.frombinary(obpacket)
+                    self.ob_hk = ObHkPacket.frombinary(obpacket)
 
     def crc16(self, data: bytes):
         return binascii.crc_hqx(data, 0xFFFF)
 
-class RegularHkPacket(HkPacket):
+class EbRegularHkPacket(EbHkPacket):
     """Subclass for regular HKs."""
     typeId: ClassVar[int] = 0b000001
 
-class ResponseHkPacket(HkPacket):
+class EbResponseHkPacket(EbHkPacket):
     """Subclass for response HKs."""
     typeId: ClassVar[int] = 0b000010
 
-class PostHkPacket(TmPacket):
+class EbPostHkPacket(EbTmPacket):
     """Subclass for power on self test HK."""
 
     typeId: ClassVar[int] = 0b000011
-    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.post_hk)
+    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.post_hk)
 
     def __init__(self, **kwargs):
         try:
@@ -155,10 +155,10 @@ class PostHkPacket(TmPacket):
         except Exception as e:
             raise
 
-class DumpDataPacket(TmPacket):
+class EbDumpDataPacket(EbTmPacket):
     """Subclass for dump data packets."""
 
-    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.dump_data, "DUMP_DATA")
+    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.dump_data, "DUMP_DATA")
     typeId: ClassVar[int] = 0b000100
 
     # Dump data is variable-length, so we can't use strict checking.
@@ -171,9 +171,9 @@ class DumpDataPacket(TmPacket):
             super().__init__(**kwargs)
             if kwargs.get("packet", None) is not None:
                 if len(kwargs["packet"]) < self.header.min_length_bytes + self.header.blockLen:
-                    raise TmPacketException("Packet too short")
+                    raise EbTmPacketException("Packet too short")
                 if len(kwargs["packet"]) > self.header.min_length_bytes + self.header.blockLen:
-                    raise TmPacketException("Packet too long")
+                    raise EbTmPacketException("Packet too long")
                 self.DUMP_DATA = kwargs["packet"][self.min_length_bytes:]
         except Exception as e:
             raise
@@ -186,7 +186,7 @@ class EbScienceRow(BitstructTemplateClass):
     # in most cases it's going to be too long.
     strict_length_checking: ClassVar[bool] = False
 
-class ScienceDataPacket(TmPacket):
+class EbScienceDataPacket(EbTmPacket):
     """Base class for science packets.
 
     There are two typeIds which contain science packets, so we'll have a base
@@ -223,19 +223,19 @@ class ScienceDataPacket(TmPacket):
             self.startTime = self.START_TIME_S + self.START_TIME_MS / 1000
             self.endTime = self.END_TIME_S + self.END_TIME_MS / 1000
 
-class ScienceDataCPacket(ScienceDataPacket):
+class EbScienceDataCPacket(EbScienceDataPacket):
     """Subclass for critical science packets.
 
     This just inherits from ScienceDataPacket and specifies the relevant type Id.
     """
-    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.eb_sci, name="SCI_DATA")
+    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_sci, name="SCI_DATA")
     typeId: ClassVar[int] = 0b000101
 
-class ScienceDataNcPacket(ScienceDataPacket):
+class EbScienceDataNcPacket(EbScienceDataPacket):
     """Subclass for non-critical science packets.
 
     This just inherits from ScienceDataPacket and specifies the relevant type Id.
     """
-    template: ClassVar[list[tuple[str, str]]] = TmPacket.strip_padding(tm.eb_sci, name="SCI_DATA")
+    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_sci, name="SCI_DATA")
     typeId: ClassVar[int] = 0b000110
 
