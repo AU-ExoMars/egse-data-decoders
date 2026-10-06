@@ -4,13 +4,13 @@ import tcstruct as tc
 
 from bitstruct_template_class import BitstructTemplateClass, BitstructTemplateException
 
-class TcPacketException(BitstructTemplateException):
+class EbTcPacketException(BitstructTemplateException):
     pass
 
-class TcHeader(BitstructTemplateClass):
+class EbTcHeader(BitstructTemplateClass):
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header
 
-class TcPacket(BitstructTemplateClass):
+class EbTcPacket(BitstructTemplateClass):
     """The base class for TCs.
 
     This provides the generic primitives for decoding TC packets. Subclasses
@@ -22,20 +22,20 @@ class TcPacket(BitstructTemplateClass):
 
     @classmethod
     def frombinary(cls, data):
-        header = TcHeader(data[:TcHeader.min_length_bytes])
+        header = EbTcHeader(data[:EbTcHeader.min_length_bytes])
         if header.magic != cls.MAGIC:
-            raise TcPacketException("Incorrect packet magic number")
+            raise EbTcPacketException("Incorrect packet magic number")
         try:
-            return super().frombinary(data[:TcHeader.min_length_bytes+header.dataLen])
+            return super().frombinary(data[:EbTcHeader.min_length_bytes+header.dataLen])
         except BitstructTemplateException as e:
-            raise TcPacketException(f"No subclass accepted this packet (block ID={header.blockId}, data length={header.dataLen})") from e
+            raise EbTcPacketException(f"No subclass accepted this packet (block ID={header.blockId}, data length={header.dataLen})") from e
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if self.blockId is not None and self.blockId != self.matchBlockId:
-            raise TcPacketException("Block ID does not match")
+            raise EbTcPacketException("Block ID does not match")
 
-class TcRet(TcPacket):
+class EbTcRet(EbTcPacket):
     """The RET telecommand."""
 
     matchBlockId: ClassVar[int] = 0x00
@@ -53,16 +53,16 @@ class TcRet(TcPacket):
         if kwargs.get("packet", None) is not None:
             self.ret = self.retSeconds + self.retFractional/65536.0
 
-class TcRequestHk(TcPacket):
+class EbTcRequestHk(EbTcPacket):
     """The REQUEST_HK telecommand."""
 
     matchBlockId: ClassVar[int] = 0x01
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_request_hk
 
-class TcPatch(TcPacket):
+class EbTcPatch(EbTcPacket):
     """The PATCH telecommand has several variants, we need a cleverer __init__.
 
-    We'll use TcPatch as a base class, with the various variants subclassing
+    We'll use EbTcPatch as a base class, with the various variants subclassing
     it and declaring their variant ID's. The base class provides a
     constructor which checks the ID, and that should allow frombinary to
     find the right one.
@@ -84,101 +84,101 @@ class TcPatch(TcPacket):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if self.variant is not None and self.variant != self.matchVariant:
-            raise TcPacketException("Wrong patch variant")
+            raise EbTcPacketException("Wrong patch variant")
 
         if kwargs.get("packet", None) is not None:
             # Single variant has the data length specified in the header.
             self.patchPayload = kwargs["packet"][self.min_length_bytes:]
 
-class TcPatchSingle(TcPatch):
+class EbTcPatchSingle(EbTcPatch):
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_patch_single
     matchVariant: ClassVar[int] = 0
 
-class TcPatchInitialise(TcPatch):
+class EbTcPatchInitialise(EbTcPatch):
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_patch_initialise
     matchVariant: ClassVar[int] = 1
 
-class TcPatchContinuation(TcPatch):
+class EbTcPatchContinuation(EbTcPatch):
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_patch_continuation
     matchVariant: ClassVar[int] = 2
 
-class TcPatchFinalise(TcPatch):
+class EbTcPatchFinalise(EbTcPatch):
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_patch_finalise
     matchVariant: ClassVar[int] = 3
 
-class TcDump(TcPacket):
+class EbTcDump(EbTcPacket):
     """The DUMP telecommand."""
 
     matchBlockId: ClassVar[int] = 0x03
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_dump
 
-class TcSetHkRate(TcPacket):
+class EbTcSetHkRate(EbTcPacket):
     """The SET_HK_RATE telecommand."""
 
     matchBlockId: ClassVar[int] = 0x04
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_hk_rate
 
-class TcMonitorAddr(TcPacket):
+class EbTcMonitorAddr(EbTcPacket):
     """The MONITOR_ADDR telecommand."""
 
     matchBlockId: ClassVar[int] = 0x05
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_monitor_addr
 
-class TcAbort(TcPacket):
+class EbTcAbort(EbTcPacket):
     """The ABORT telecommand."""
 
     matchBlockId: ClassVar[int] = 0x06
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_abort
 
-class TcGenericTc(TcPacket):
+class EbTcGenericTc(EbTcPacket):
     """The GENERIC_TC telecommand."""
 
     matchBlockId: ClassVar[int] = 0x07
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_generic_tc
 
-class TcSafe(TcPacket):
+class EbTcSafe(EbTcPacket):
     """The SAFE telecommand."""
 
     matchBlockId: ClassVar[int] = 0x08
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_safe
 
-class TcStandby(TcPacket):
+class EbTcStandby(EbTcPacket):
     """The STANDBY telecommand."""
 
     matchBlockId: ClassVar[int] = 0x09
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_standby
 
-class TcAcquisition(TcPacket):
+class EbTcAcquisition(EbTcPacket):
     """The ACQUISITION telecommand."""
 
     matchBlockId: ClassVar[int] = 0x0A
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_acquisition
 
-class TcSetMotorConfigs(TcPacket):
+class EbTcSetMotorConfigs(EbTcPacket):
     """The SET_MOTOR_CONFIGS telecommand."""
 
     matchBlockId: ClassVar[int] = 0x0B
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_motor_configs
 
-class TcSetHeaterConfigs(TcPacket):
+class EbTcSetHeaterConfigs(EbTcPacket):
     """The SET_HEATER_CONFIGS telecommand."""
 
     matchBlockId: ClassVar[int] = 0x0C
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_heater_configs
 
-class TcSetAcqConfigs(TcPacket):
+class EbTcSetAcqConfigs(EbTcPacket):
     """The SET_ACQ_CONFIGS telecommand."""
 
     matchBlockId: ClassVar[int] = 0x0D
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_acq_configs
 
-class TcSetTecSetpoint(TcPacket):
+class EbTcSetTecSetpoint(EbTcPacket):
     """The SET_TEC_SETPOINT telecommand."""
 
     matchBlockId: ClassVar[int] = 0x0E
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_tec_setpoint
 
-class TcSetFdirLimits(TcPacket):
+class EbTcSetFdirLimits(EbTcPacket):
     """The SET_FDIR_LIMITS telecommand.
 
     This one's not yet fully decoded.
@@ -187,79 +187,79 @@ class TcSetFdirLimits(TcPacket):
     matchBlockId: ClassVar[int] = 0x0F
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_set_fdir_limits
 
-class TcEnMechBoard(TcPacket):
+class EbTcEnMechBoard(EbTcPacket):
     """The EN_MECH_BOARD telecommand."""
 
     matchBlockId: ClassVar[int] = 0x10
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_en_mech_board
 
-class TcEnDetBoard(TcPacket):
+class EbTcEnDetBoard(EbTcPacket):
     """The EN_DET_BOARD telecommand."""
 
     matchBlockId: ClassVar[int] = 0x11
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_en_det_board
 
-class TcEnMechHeater(TcPacket):
+class EbTcEnMechHeater(EbTcPacket):
     """The EN_MECH_HEATER telecommand."""
 
     matchBlockId: ClassVar[int] = 0x12
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_en_mech_heater
 
-class TcEnDetHeater(TcPacket):
+class EbTcEnDetHeater(EbTcPacket):
     """The EN_DET_HEATER telecommand."""
 
     matchBlockId: ClassVar[int] = 0x13
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_en_det_heater
 
-class TcEnOb5V(TcPacket):
+class EbTcEnOb5V(EbTcPacket):
     """The EN_OB5V telecommand."""
 
     matchBlockId: ClassVar[int] = 0x14
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_en_ob5v
 
-class TcObPark(TcPacket):
+class EbTcObPark(EbTcPacket):
     """The OB_PARK telecommand."""
 
     matchBlockId: ClassVar[int] = 0x14
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_ob_park
 
-class TcObHoming(TcPacket):
+class EbTcObHoming(EbTcPacket):
     """The OB_HOMING telecommand."""
 
     matchBlockId: ClassVar[int] = 0x16
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_ob_homing
 
-class TcObHk(TcPacket):
+class EbTcObHk(EbTcPacket):
     """The OB_HK telecommand."""
 
     matchBlockId: ClassVar[int] = 0x17
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_ob_hk
 
-class TcCheckMemory(TcPacket):
+class EbTcCheckMemory(EbTcPacket):
     """The CHECK_MEMORY telecommand."""
 
     matchBlockId: ClassVar[int] = 0x64
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_check_memory
 
-class TcGoTo(TcPacket):
+class EbTcGoTo(EbTcPacket):
     """The GOTO telecommand."""
 
     matchBlockId: ClassVar[int] = 0x65
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_goto
 
-class TcCopyMemory(TcPacket):
+class EbTcCopyMemory(EbTcPacket):
     """The COPY_MEMORY telecommand."""
 
     matchBlockId: ClassVar[int] = 0x66
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_copy_memory
 
-class TcSwitchRs422(TcPacket):
+class EbTcSwitchRs422(EbTcPacket):
     """The SWITCH_RS422 telecommand."""
 
     matchBlockId: ClassVar[int] = 0x67
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_switch_rs422
 
-class TcSetTecCurrent(TcPacket):
+class EbTcSetTecCurrent(EbTcPacket):
     """The SET_TEC_CURRENT telecommand."""
 
     matchBlockId: ClassVar[int] = 0x68
@@ -267,5 +267,5 @@ class TcSetTecCurrent(TcPacket):
 
 
 if __name__ == "__main__":
-    test = TcRet(packet=None)
+    test = EbTcRet(packet=None)
     print(test)
