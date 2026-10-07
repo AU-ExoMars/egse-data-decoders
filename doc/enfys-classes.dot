@@ -22,6 +22,7 @@ raw_eb: seagreen
 raw_ob: darkseagreen
 uses: green
 contains: red
+instance: blue
 ---
 digraph classes {
     graph [ dpi=300 ];
@@ -44,6 +45,7 @@ digraph classes {
         Dashed arrows are a \"is one of\" relationship.
         {{uses|capitalize}} arrows are a \"uses\" relationship.
         {{contains|capitalize}} arrows are a \"contains a/some\" relationship.
+        {{instance|capitalize}} arrows are an \"instance of\" relationship.
         ";
         rank=same;
         cal [label="Instrument\nCalibration Data", fillcolor="{{calibration}}", style=filled];
@@ -65,11 +67,9 @@ digraph classes {
         }
         subgraph calsub {
             rank=same;
-            EbCalibrationEM;
-            EbCalibrationDEM;
-            EbCalibrationFM;
-            ObCalibrationBB2;
-            ObCalibrationEM;
+            eb_calibration_em;
+            ob_calibration_bb2;
+            ob_calibration_em;
         }
     }
 
@@ -135,13 +135,11 @@ digraph classes {
 
     // Calibration data for the various instruments.
     EbCalibration -> dataclass;
-    EbCalibrationEM -> EbCalibration;
-    EbCalibrationDEM -> EbCalibration;
-    EbCalibrationFM -> EbCalibration;
+    eb_calibration_em -> EbCalibration [color={{instance}}];
 
     ObCalibration -> dataclass;
-    ObCalibrationBB2 -> ObCalibration;
-    ObCalibrationEM -> ObCalibration;
+    ob_calibration_bb2 -> ObCalibration [color={{instance}}];
+    ob_calibration_em -> ObCalibration [color={{instance}}];
 
     // Collections of processed data.
 
@@ -151,7 +149,7 @@ digraph classes {
     ObHkDataSet -> ObProcessedHk [color={{contains}}];
     ObHkDataSet -> ObProcessedHk [color={{contains}}];
     ObHkDataSet -> ObProcessedHk [color={{contains}}];
-    ObProcessedHk -> { ObCalibrationBB2, ObCalibrationEM } [color={{uses}}];
+    ObProcessedHk -> { ob_calibration_bb2, ob_calibration_em } [color={{uses}}];
 
     // EB HK data.
     EbHkDataSet -> EbProcessedHk [color={{contains}}];
@@ -159,7 +157,7 @@ digraph classes {
     EbHkDataSet -> EbProcessedHk [color={{contains}}];
     EbProcessedHk -> { EbResponseHkPacket, EbRegularHkPacket } [style=dashed];
     EbProcessedHk -> ObProcessedHk [color={{contains}}];
-    EbProcessedHk -> { EbCalibrationEM, EbCalibrationDEM, EbCalibrationFM } [color={{uses}}];
+    EbProcessedHk -> { eb_calibration_em, ob_calibration_bb2, ob_calibration_em } [color={{uses}}];
 
     // OB or EB science data.
     ScienceRow-> { EbScienceRow, ObScienceDataPacket } [style=dashed]
@@ -168,7 +166,7 @@ digraph classes {
     ScienceDataSet -> ProcessedScienceRow [color={{contains}}];
     TimestampedScienceRow -> ScienceRow;
     ProcessedScienceRow -> TimestampedScienceRow;
-    ProcessedScienceRow -> { ObCalibrationBB2, ObCalibrationEM } [color={{uses}}];
+    ProcessedScienceRow -> { ob_calibration_bb2, ob_calibration_em } [color={{uses}}];
 
     // Serial packets from the OB.
     ObTmPacket -> BitstructTemplateClass
