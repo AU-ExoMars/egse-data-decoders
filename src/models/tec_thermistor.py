@@ -34,15 +34,16 @@ class TecThermistorModel(FittableModel):
     All temperatures are specified in degrees Celsius and all resistances
     are in Ohms.
 
-    While we have a calibration curve for the TEC thermistor, we've got
-    another resistor and an ADC in the system.
-
-    FittableModel's calibration will attempt to optimise the value for
-    R_upper.
+    The calibration data I've seen looks to be best fitted by a formula
+    of the form r = exp(a*t*t + b*t + c), so this is what we'll use and
+    calibrate below.
     """
 
     def __init__(self,
-            r_upper: float|tuple[float,float]|None = (4990*0.99, 4990*1.01),
+            r_upper: float|tuple[float,float]|None = None,
+            a: float|None = None,
+            b: float|None = None,
+            c: float|None = None,
             adc_bits: int = 16,
         ) -> None:
         """Class constructor.
@@ -50,15 +51,19 @@ class TecThermistorModel(FittableModel):
         :param r_upper: The resistance of the top half of the potential divider.
         :param adc_bits: The resolution of the ADC, in bits.
         """
-        # Pass r_upper up to FittableModel.
-        super().__init__(r_upper = r_upper)
+        # Pass calibration data up to FittableModel.
+        super().__init__(r_upper = r_upper, a=a, b=b, c=c)
 
         self.adc_bits = adc_bits
         self.adc_maxval = (1 << adc_bits)-1
 
-        self.A = 1.364e-4
-        self.B = -3.758e-02
-        self.C = 8.153
+    def __call__(self, dn: int|np.ndarray) -> float|np.ndarray:
+        """Convert a DN value to a temperature.
+
+        This is just a thin wrapper around dn_to_t, allowing the object
+        to be callable, since this is the primary usage of the class.
+        """
+        return self.dn_to_t(dn)
 
     def dn_to_r(self, dn: int|np.ndarray) -> float|np.ndarray:
         """Convert from DN to thermistor resistance.
@@ -93,9 +98,9 @@ class TecThermistorModel(FittableModel):
            resistance = exp(a*t**2 + b*t + c)
 
         A fit of the calibration data gave the class attributes
-        A, B and C.
+        a, b and c.
         """
-        return np.exp(self.A*t*t + self.B*t + self.C)
+        return np.exp(self.a*t*t + self.b*t + self.c)
 
     def r_to_t(self, r: float|np.ndarray) -> float|np.ndarray:
         """Convert a resistance to a temperature.
@@ -103,12 +108,12 @@ class TecThermistorModel(FittableModel):
         Given a thermistor resistance, we can solve the quadratic
         to calculate the temperature. See t_to_r above.
         """
-        inner = self.B*self.B - 4*self.A*(self.C - np.log(r))
+        inner = self.b*self.b - 4*self.a*(self.c - np.log(r))
         if isinstance(inner, np.ndarray):
             inner[inner < 0] = 0
         elif inner < 0:
             inner = 0
-        return (-self.B - np.sqrt(inner))/(2*self.A)
+        return (-self.b - np.sqrt(inner))/(2*self.a)
 
     def dn_to_t(self, dn: int|np.ndarray) -> float|np.ndarray:
         """Convert a DN value to a temperature.
@@ -119,14 +124,6 @@ class TecThermistorModel(FittableModel):
         This is probably the main method from this class that you'll use.
         """
         return self.r_to_t(self.dn_to_r(dn))
-
-    def __call__(self, dn: int|np.ndarray) -> float|np.ndarray:
-        """Convert a DN value to a temperature.
-
-        This is just a thin wrapper around dn_to_t, allowing the object
-        to be callable, since this is the primary usage of the class.
-        """
-        return self.dn_to_t(dn)
 
     def t_to_dn(self, t: float|np.ndarray) -> int|np.ndarray:
         """Convert a temperature to an expected DN value.
