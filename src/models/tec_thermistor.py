@@ -63,7 +63,9 @@ class TecThermistorModel(FittableModel):
         This is just a thin wrapper around dn_to_t, allowing the object
         to be callable, since this is the primary usage of the class.
         """
-        return self.dn_to_t(dn)
+        if isinstance(dn, np.ndarray):
+            return self.dn_to_t(dn)
+        return float(self.dn_to_t(dn))
 
     def dn_to_r(self, dn: int|np.ndarray) -> float|np.ndarray:
         """Convert from DN to thermistor resistance.

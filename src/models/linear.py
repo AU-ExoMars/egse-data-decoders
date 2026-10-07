@@ -18,4 +18,6 @@ class LinearModel(FittableModel):
 
     def __call__(self, value: float|np.ndarray) -> float|np.ndarray:
         """Perform the model calculation."""
-        return self.slope*value + self.intercept
+        if isinstance(value, np.ndarray):
+            return self.slope*value + self.intercept
+        return float(self.slope*value + self.intercept)

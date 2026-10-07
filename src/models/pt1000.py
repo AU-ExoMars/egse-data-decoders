@@ -134,7 +134,11 @@ class Pt1000Model(FittableModel):
         This is just a thin wrapper around dn_to_t, allowing the object
         to be callable, since this is the primary usage of the class.
         """
-        return self.dn_to_t(dn)
+        if isinstance(dn, np.ndarray):
+            return self.dn_to_t(dn)
+
+        # I wish numpy would convert scalars to floats automatically.
+        return float(self.dn_to_t(dn))
 
     def t_to_dn(self, t: float) -> int:
         """Convert a temperature to an expected DN value.

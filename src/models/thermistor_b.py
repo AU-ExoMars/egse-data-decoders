@@ -67,7 +67,9 @@ class ThermistorBModel(FittableModel):
 
     def __call__(self, value: float|np.ndarray) -> float|np.ndarray:
         """Perform the model calculation."""
-        return self.dn_to_t(value)
+        if isinstance(value, np.ndarray):
+            return self.dn_to_t(value)
+        return float(self.dn_to_t(value))
 
     def dn_to_t(self, dn):
         return self.r_to_t(self.dn_to_r(dn))
