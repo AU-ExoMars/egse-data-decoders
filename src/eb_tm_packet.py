@@ -197,8 +197,8 @@ class EbScienceDataPacket(EbTmPacket):
     strict_length_checking: ClassVar[bool] = False
 
     measurements: list[EbScienceRow] | None
-    startTime: float | None
-    endTime: float | None
+    start_time: float | None
+    end_time: float | None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -220,8 +220,8 @@ class EbScienceDataPacket(EbTmPacket):
                 science = science[EbScienceRow.min_length_bytes:]
 
             # Decode start and end times to floating point seconds.
-            self.startTime = self.START_TIME_S + self.START_TIME_MS / 1000
-            self.endTime = self.END_TIME_S + self.END_TIME_MS / 1000
+            self.start_time = self.START_TIME_S + self.START_TIME_MS / 1000
+            self.end_time = self.END_TIME_S + self.END_TIME_MS / 1000
 
 class EbScienceDataCPacket(EbScienceDataPacket):
     """Subclass for critical science packets.
