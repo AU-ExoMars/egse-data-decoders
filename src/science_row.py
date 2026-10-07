@@ -8,6 +8,7 @@ from eb_tm_packet import (
     EbScienceDataPacket,
     EbScienceRow,
 )
+from enfys_calibration import ObCalibration
 from ob_tm_packet import ObScienceDataPacket
 
 
@@ -72,11 +73,11 @@ class ScienceRow:
     AVERAGING_NUMBER: int|None = None
 
     lobt: float|None = None
-    startTime: float | None = None
-    endTime: float | None = None
+    start_time: float | None = None
+    end_time: float | None = None
 
     def __init__(self,
-        src_row: ObScienceDataPacket|EbScienceRow|None = None,
+        src_row: "ScienceRow|ObScienceDataPacket|EbScienceRow|None" = None,
         src_header: EbScienceDataPacket|None = None,
     ) -> None:
         """Populate fields from a row of either valid type.
@@ -84,8 +85,14 @@ class ScienceRow:
         In the case of EB data, we require an EB science data packet too,
         so we can capture information from its header.
         """
-        # Get the list of fields defined above.
+        # Get the list of defined dataclass fields.
         fields = {x.name for x in dataclasses.fields(self.__class__)}
+
+        if isinstance(src_row, ScienceRow):
+            for name in fields:
+                if hasattr(src_row, name):
+                    setattr(self, name, getattr(src_row, name))
+            return
 
         seen = set()
         if isinstance(src_row, ObScienceDataPacket):
@@ -109,8 +116,9 @@ class ScienceRow:
             self.SWIR_END_TEMP = self.SWIR_TEMP
             self.START_MTR_ABS_STEPS = self.MTR_ABS_STEPS
             # FPGA_SAMPLES perhaps?
+            return
 
-        elif isinstance(src_row, EbScienceRow):
+        if isinstance(src_row, EbScienceRow):
             if not isinstance(src_header, EbScienceDataPacket):
                 raise TypeError("src_header must also be present for EB science rows")
 
@@ -133,3 +141,107 @@ class ScienceRow:
                         setattr(self, name, value)
                         seen.add(name)
 
+@dataclasses.dataclass(init=False)
+class TimestampedScienceRow(ScienceRow):
+    """A science row with a timestamp.
+
+    This timestamp can be any float that makes sense to the user
+    and doesn't have to be derived from lobt, for example.
+    """
+
+    timestamp: float|None = None
+
+    def __init__(self,
+        src_row: ScienceRow|ObScienceDataPacket|EbScienceRow|None = None,
+        src_header: EbScienceDataPacket|None = None,
+        timestamp: float|None = None,
+    ) -> None:
+        """Store timestamp and pass the rest up."""
+        self.timestamp = timestamp
+        super().__init__(src_row, src_header)
+
+@dataclasses.dataclass(init=False)
+class ProcessedScienceRow(TimestampedScienceRow):
+    """A science row with post-processing of data.
+
+    Given instrument calibration objects, this class will perform
+    decoding of data to real-world units.
+    """
+
+    swir_wavelength: float|None = None
+    mwir_wavelength: float|None = None
+
+    swir_scaled_dn: float|None = None
+    mwir_scaled_dn: float|None = None
+
+    swir_start_temperature: float|None = None
+    heatsink_start_temperature: float|None = None
+    mwir_start_temperature: float|None = None
+
+    swir_end_temperature: float|None = None
+    heatsink_end_temperature: float|None = None
+    mwir_end_temperature: float|None = None
+
+    def __init__(self,
+        src_row: ScienceRow|ObScienceDataPacket|EbScienceRow|None = None,
+        src_header: EbScienceDataPacket|None = None,
+        timestamp: float|None = None,
+        ob_calibration: ObCalibration|None = None,
+    ) -> None:
+        """Post-process of data to real-world values.
+
+        The incoming data is passed up to super(), and then the
+        supplied calibration object is used to convert various DN
+        values into more useful real-world(ish) values.
+        """
+        super().__init__(src_row, src_header, timestamp)
+
+        if ob_calibration is not None:
+            self.swir_wavelength = ob_calibration.swir_wavelength_model(
+                self.MTR_ABS_STEPS
+            )
+            self.mwir_wavelength = ob_calibration.mwir_wavelength_model(
+                self.MTR_ABS_STEPS
+            )
+
+            self.swir_start_temperature = ob_calibration.swir_temperature_model(
+                self.SWIR_START_TEMP
+            )
+            self.heatsink_start_temperature = ob_calibration.heatsink_temperature_model(
+                self.HEATSINK_START_TEMP
+            )
+            self.mwir_start_temperature = ob_calibration.eb_peltier_temperature_model(
+                self.MWIR_START_TEMP
+            )
+
+            self.swir_end_temperature = ob_calibration.swir_temperature_model(
+                self.SWIR_END_TEMP
+            )
+            self.heatsink_end_temperature = ob_calibration.heatsink_temperature_model(
+                self.HEATSINK_END_TEMP
+            )
+            self.mwir_end_temperature = ob_calibration.eb_peltier_temperature_model(
+                self.MWIR_END_TEMP
+            )
+
+            if self.SWIR_HIGH < ob_calibration.max_usable_adc_value:
+                self.swir_scaled_dn = self.SWIR_HIGH
+            elif self.SWIR_MED < ob_calibration.max_usable_adc_value:
+                self.swir_scaled_dn = ob_calibration.swir_medium_to_high_model(
+                    self.SWIR_MED
+                )
+            else:
+                self.swir_scaled_dn = ob_calibration.swir_medium_to_high_model(
+                    ob_calibration.swir_low_to_medium_model(self.SWIR_LOW)
+                )
+
+            if self.MWIR_HIGH < ob_calibration.max_usable_adc_value:
+                self.mwir_scaled_dn = self.MWIR_HIGH
+            elif self.MWIR_MED < ob_calibration.max_usable_adc_value:
+                self.mwir_scaled_dn = ob_calibration.mwir_medium_to_high_model(
+                    self.MWIR_MED
+                )
+            else:
+                self.mwir_scaled_dn = ob_calibration.mwir_medium_to_high_model(
+                    ob_calibration.mwir_low_to_medium_model(self.MWIR_LOW)
+                )
