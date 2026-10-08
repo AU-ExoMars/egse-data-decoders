@@ -79,12 +79,11 @@ class BitstructTemplateClass:
 
         # If the subclass doesn't have a template then we can't do any of
         # the below. Not necessarily an error - the subclass could be an
-        # intermediate class. N.B. intentional use of __dict__ rather
-        # than hasattr. We only want to trigger decodes on precisely
-        # the classes that define templates, not ones which inherit from
-        # them.
-        if "template" not in cls.__dict__:
+        # intermediate class.
+        if not hasattr(cls, "template"):
+            print(f"Init_subclass for {cls.__name__} - no template")
             return
+        print(f"Init_subclass for {cls.__name__} - continuing")
 
         # Keep a record of sizes and offsets - subclasses may want
         # to do stuff with the data (e.g. CRC calculation).
@@ -282,7 +281,10 @@ class BitstructTemplateClass:
         for c in _recursive_subclasses(cls):
             # As above, we use __dict__ rather than hasattr so that
             # we don't offer data to subclasses of classes that define
-            # a template.
+            # a template.  N.B. intentional use of __dict__ rather
+            # than hasattr. We only want to trigger decodes on precisely
+            # the classes that define templates, not ones which inherit from
+            # them.
             if "template" in c.__dict__:
                 # We'll offer the data to each subclass, in turn, and
                 # the first one whose constructor accepts the data can
