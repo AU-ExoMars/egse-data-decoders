@@ -24,6 +24,9 @@ uses: green
 contains: red
 instance: blue
 ---
+{% macro node(node_name, done=False) %}
+{{ node_name }} [ label="{{node_name}}"{% if not done %} fontcolor="red"{% endif %} ]
+{% endmacro %}
 digraph classes {
     graph [ dpi=300 ];
     size = "8x12";
@@ -32,28 +35,10 @@ digraph classes {
 
     rankdir=BT
 
-    BitstructTemplateClass;
-    dataclass;
-
-    subgraph key {
-        cluster=true;
-        // Go figure!
-        labelloc = "t";
-        labeljust = "l";
-        label="
-        Black arrows are an \"is a\" relationship.
-        Dashed arrows are a \"is one of\" relationship.
-        {{uses|capitalize}} arrows are a \"uses\" relationship.
-        {{contains|capitalize}} arrows are a \"contains a/some\" relationship.
-        {{instance|capitalize}} arrows are an \"instance of\" relationship.
-        ";
-        rank=same;
-        cal [label="Instrument\nCalibration Data", fillcolor="{{calibration}}", style=filled];
-        sdp [label="Processed\nScience Data", fillcolor="{{science_data}}", style=filled];
-        ebhkp [label="Processed\nEB HK Data", fillcolor="{{processed_eb_hk}}", style=filled];
-        obhkp [label="Processed\nOB HK Data", fillcolor="{{processed_ob_hk}}", style=filled];
-        ebraw [label="Raw EB\nTM data", fillcolor="{{raw_eb}}", style=filled];
-        obraw [label="Raw OB\nTM data", fillcolor="{{raw_ob}}", style=filled];
+    subgraph top {
+        rank = same;
+        {{ node("BitstructTemplateClass", done=True) }};
+        {{ node("dataclass", done=True) }};
     }
 
     subgraph cluster_calibration {
@@ -62,14 +47,14 @@ digraph classes {
 
         subgraph calbase {
             rank=same;
-            EbCalibration;
-            ObCalibration;
+            {{node("EbCalibration", done=True)}};
+            {{node("ObCalibration", done=True)}};
         }
         subgraph calsub {
             rank=same;
-            eb_calibration_em;
-            ob_calibration_bb2;
-            ob_calibration_em;
+            {{node("eb_calibration_em", done=True)}};
+            {{node("ob_calibration_bb2", done=True)}};
+            {{node("ob_calibration_em", done=True)}};
         }
     }
 
@@ -77,60 +62,61 @@ digraph classes {
         cluster=true;
         style=invis;
         node [fillcolor="{{science_data}}", style=filled];
-        ScienceRow;
-        TimestampedScienceRow;
-        ProcessedScienceRow;
-        ScienceDataSet;
+        {{node("ScienceRow", done=True)}};
+        {{node("TimestampedScienceRow", done=True)}};
+        {{node("ProcessedScienceRow", done=True)}};
+        {{node("ScienceDataSet")}};
     }
 
     subgraph ebhkdata {
         node [fillcolor="{{processed_eb_hk}}", style=filled];
         cluster=true;
         style=invis;
-        EbProcessedHk;
-        EbHkDataSet;
+        {{node("TimestampedEbHk", done=True)}};
+        {{node("ProcessedEbHk")}};
+        {{node("EbHkDataSet")}};
     }
 
     subgraph obhkdata {
         cluster=true;
         style=invis;
         node [fillcolor="{{processed_ob_hk}}", style=filled];
-        ObTimestampedHk;
-        ObProcessedHk;
-        ObHkDataSet;
+        {{node("TimestampedObHk", done=True)}};
+        {{node("ProcessedObHk", done=True)}};
+        {{node("ObHkDataSet")}};
     }
 
     subgraph OB {
         cluster=true;
         style=invis;
         node [fillcolor="{{raw_ob}}", style=filled];
-        ObTmPacket;
-        ObHkPacket;
-        ObScienceDataPacket;
-        ObAckPacket;
-        ObNackPacket;
+        {{node("ObTmPacket", done=True)}};
+        {{node("ObHkPacket", done=True)}};
+        {{node("ObScienceDataPacket", done=True)}};
+        {{node("ObAckPacket", done=True)}};
+        {{node("ObNackPacket", done=True)}};
     }
 
     subgraph EB {
         cluster=true;
         style=invis;
         node [fillcolor="{{raw_eb}}", style=filled];
-        EbTmHeader;
-        EbScienceRow;
+        {{node("EbTmHeader", done=True)}};
+        {{node("EbScienceRow", done=True)}};
 
-        EbTmPacket;
+        {{node("EbTmPacket", done=True)}};
 
-        EbHkPacket;
-        EbPostHkPacket;
+        {{node("EbHkPacket", done=True)}};
+        {{node("EbPostHkPacket", done=True)}};
 
-        EbRegularHkPacket;
-        EbResponseHkPacket;
+        {{node("EbRegularHkPacket", done=True)}};
+        {{node("EbResponseHkPacket", done=True)}};
 
-        EbDumpDataPacket;
+        {{node("EbDumpDataPacket", done=True)}};
 
-        EbScienceDataPacket;
-        EbScienceDataCPacket;
-        EbScienceDataNcPacket;
+        {{node("EbScienceDataPacket", done=True)}};
+        {{node("EbScienceDataCPacket", done=True)}};
+        {{node("EbScienceDataNcPacket", done=True)}};
     }
 
     // Calibration data for the various instruments.
@@ -144,23 +130,26 @@ digraph classes {
     // Collections of processed data.
 
     // OB HK data.
-    ObTimestampedHk -> ObHkPacket;
-    ObProcessedHk -> ObTimestampedHk;
-    ObHkDataSet -> ObProcessedHk [color={{contains}}];
-    ObHkDataSet -> ObProcessedHk [color={{contains}}];
-    ObHkDataSet -> ObProcessedHk [color={{contains}}];
-    ObProcessedHk -> { ob_calibration_bb2, ob_calibration_em } [color={{uses}}];
+    TimestampedObHk -> ObHkPacket;
+    ProcessedObHk -> TimestampedObHk;
+    ObHkDataSet -> ProcessedObHk [color={{contains}}];
+    ObHkDataSet -> ProcessedObHk [color={{contains}}];
+    ObHkDataSet -> ProcessedObHk [color={{contains}}];
+    ProcessedObHk -> { ob_calibration_bb2, ob_calibration_em } [color={{uses}}];
 
     // EB HK data.
-    EbHkDataSet -> EbProcessedHk [color={{contains}}];
-    EbHkDataSet -> EbProcessedHk [color={{contains}}];
-    EbHkDataSet -> EbProcessedHk [color={{contains}}];
-    EbProcessedHk -> { EbResponseHkPacket, EbRegularHkPacket } [style=dashed];
-    EbProcessedHk -> ObProcessedHk [color={{contains}}];
-    EbProcessedHk -> { eb_calibration_em, ob_calibration_bb2, ob_calibration_em } [color={{uses}}];
+    EbHkDataSet -> ProcessedEbHk [color={{contains}}];
+    EbHkDataSet -> ProcessedEbHk [color={{contains}}];
+    EbHkDataSet -> ProcessedEbHk [color={{contains}}];
+    TimestampedEbHk -> EbHkPacket;
+    TimestampedEbHk -> { EbResponseHkPacket, EbRegularHkPacket } [color={{uses}}];
+    ProcessedEbHk -> TimestampedEbHk;
+    ProcessedEbHk -> ProcessedObHk [color={{contains}}];
+    ProcessedEbHk -> { eb_calibration_em, ob_calibration_bb2, ob_calibration_em } [color={{uses}}];
 
     // OB or EB science data.
-    ScienceRow-> { EbScienceRow, ObScienceDataPacket } [style=dashed]
+    ScienceRow-> dataclass;
+    ScienceRow-> { EbScienceRow, ObScienceDataPacket } [color={{uses}}];
     ScienceDataSet -> ProcessedScienceRow [color={{contains}}];
     ScienceDataSet -> ProcessedScienceRow [color={{contains}}];
     ScienceDataSet -> ProcessedScienceRow [color={{contains}}];
@@ -196,4 +185,29 @@ digraph classes {
 
     EbScienceDataCPacket -> EbScienceDataPacket;
     EbScienceDataNcPacket -> EbScienceDataPacket;
+
+    subgraph key {
+        cluster=true;
+        rank=same;
+        // Go figure!
+        labelloc = "t";
+        labeljust = "l";
+        label="
+        Black arrows are an \"is a\" relationship.
+        {{uses|capitalize}} arrows are a \"uses\" relationship.
+        {{contains|capitalize}} arrows are a \"contains a/some\" relationship.
+        {{instance|capitalize}} arrows are an \"instance of\" relationship.
+        ";
+        cal [label="Instrument\nCalibration Data", fillcolor="{{calibration}}", style=filled];
+        sdp [label="Processed\nScience Data", fillcolor="{{science_data}}", style=filled];
+        ebhkp [label="Processed\nEB HK Data", fillcolor="{{processed_eb_hk}}", style=filled];
+        obhkp [label="Processed\nOB HK Data", fillcolor="{{processed_ob_hk}}", style=filled];
+        ebraw [label="Raw EB\nTM data", fillcolor="{{raw_eb}}", style=filled];
+        obraw [label="Raw OB\nTM data", fillcolor="{{raw_ob}}", style=filled];
+
+        // This is horrible, but the easiest way of placing the key is
+        // to link one of its nodes to another node in the graph with
+        // an invisible edge.
+        cal -> ScienceDataSet [style=invis];
+    }
 }
