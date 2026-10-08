@@ -5,10 +5,10 @@
 # just scalars.
 import numpy as np
 
-from .fittable import FittableModel
+from .potential_divider import PotentialDividerModel
 
 
-class Pt1000Model(FittableModel):
+class Pt1000Model(PotentialDividerModel):
     """Encapsulate a PT1000 temperature sensor connected to an ADC.
 
     This class represents a PT1000 temperature sensor connected as the
@@ -78,28 +78,9 @@ class Pt1000Model(FittableModel):
         self.A = 3.90802e-3
         self.B = 5.802e-7
 
-        self.adc_maxval = (1 << adc_bits)-1
-
-        self.r_upper = r_upper
-
         # Fitting only tweaks r_0, so that's all we tell
         # FittableModel about.
-        super().__init__(r_0 = r_0)
-
-    def dn_to_r(self, dn: int) -> float:
-        """Convert from DN to PT1000 resistance.
-
-        Given an ADC DN value, calculate the resistance of the PT1000.
-        """
-        return self.r_upper*dn/(self.adc_maxval-dn)
-
-    def r_to_dn(self, r: float) -> int:
-        """Convert from PT1000 resistance to DN.
-
-        Given a PT1000 resistance, calculate the DN value that the ADC
-        should output.
-        """
-        return round(self.adc_maxval*r/(r+self.r_upper))
+        super().__init__(r_upper=r_upper, r_0 = r_0, adc_bits=adc_bits)
 
     # Go from PT1000 resistance to temperature.
     def r_to_t(self, r: float) -> float:
@@ -117,36 +98,6 @@ class Pt1000Model(FittableModel):
         calculate the expected resistance of the PT1000.
         """
         return self.r_0*(1+self.A*t+self.B*t*t)
-
-    def dn_to_t(self, dn: int) -> float:
-        """Convert a DN value to a temperature.
-
-        Given a DN value, use dn_to_r, followed by r_to_t, to
-        calculate the temperature.
-
-        This is probably the main method from this class that you'll use.
-        """
-        return self.r_to_t(self.dn_to_r(dn))
-
-    def __call__(self, dn: int|np.ndarray) -> float:
-        """Convert a DN value to a temperature.
-
-        This is just a thin wrapper around dn_to_t, allowing the object
-        to be callable, since this is the primary usage of the class.
-        """
-        if isinstance(dn, np.ndarray):
-            return self.dn_to_t(dn)
-
-        # I wish numpy would convert scalars to floats automatically.
-        return float(self.dn_to_t(dn))
-
-    def t_to_dn(self, t: float) -> int:
-        """Convert a temperature to an expected DN value.
-
-        Given a temperature value, use t_to_r and r_to_dn to calculate
-        the expected DN value.
-        """
-        return self.r_to_dn(self.t_to_r(t))
 
     def __str__(self) -> str:
         """Return a representation of the object."""
