@@ -81,9 +81,7 @@ class BitstructTemplateClass:
         # the below. Not necessarily an error - the subclass could be an
         # intermediate class.
         if not hasattr(cls, "template"):
-            print(f"Init_subclass for {cls.__name__} - no template")
             return
-        print(f"Init_subclass for {cls.__name__} - continuing")
 
         # Keep a record of sizes and offsets - subclasses may want
         # to do stuff with the data (e.g. CRC calculation).
