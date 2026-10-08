@@ -19,17 +19,26 @@ class ObCalibration:
     swir_chop_target: int
     mwir_chop_target: int
 
+    # Models for translating motor steps to wavelength.
+    swir_wavelength_model: LinearModel
+    mwir_wavelength_model: LinearModel
+
     # Temperature models.
     heatsink_temperature_model: Pt1000Model
     swir_temperature_model: Pt1000Model
+    digital_temperature_model: Pt1000Model
+    detector_temperature_model: Pt1000Model
+    mechanism_temperature_model: Pt1000Model
+    motor_temperature_model: Pt1000Model
 
     # While the EB reads this, the thermistor itself is
     # in the OB and calibration needs to follow the board.
     eb_peltier_temperature_model: TecThermistorModel
 
-    # Models for translating motor steps to wavelength.
-    swir_wavelength_model: LinearModel
-    mwir_wavelength_model: LinearModel
+    # Voltage and current models.
+    voltage_3v3_model: LinearModel
+    voltage_1v5_model: LinearModel
+    mechanism_current_model: LinearModel
 
     # Models for the amplifier gains. The ADCs are nonlinear
     # at the low end. While we're not going to use the values

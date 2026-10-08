@@ -2,6 +2,8 @@
 
 This file contains the determined calibration values for
 the various OB and EB instruments.
+
+FIXME: All of these calibrations are approximate at the moment.
 """
 
 from enfys_calibration import EbCalibration, ObCalibration
@@ -23,12 +25,20 @@ ob_calibration_bb2 = ObCalibration(
     swir_chop_target = 5000,
     mwir_chop_target = 5000,
 
+    swir_wavelength_model = LinearModel(0.1218, 607.8),
+    mwir_wavelength_model = LinearModel(0.2165, 1096.1),
+
     heatsink_temperature_model = Pt1000Model(10000, 1021.31),
     swir_temperature_model = Pt1000Model(10000, 1013.02),
     eb_peltier_temperature_model = TecThermistorModel(4990, 1.364e-4, -3.758e-2, 8.153),
+    digital_temperature_model = Pt1000Model(1000, 1060.74),
+    detector_temperature_model = Pt1000Model(1000, 1079.80),
+    mechanism_temperature_model = Pt1000Model(1000, 1042.92),
+    motor_temperature_model = Pt1000Model(1000, 1017.55),
 
-    swir_wavelength_model = LinearModel(0.1218, 607.8),
-    mwir_wavelength_model = LinearModel(0.2165, 1096.1),
+    voltage_3v3_model = LinearModel(1.0445e-4, 0),
+    voltage_1v5_model = LinearModel(5.2413e-5, 0),
+    mechanism_current_model = LinearModel(3.3897e-6, 0),
 
     swir_low_to_medium_model = AdcNonlinearModel(29.523, -715.3, 58),
     swir_medium_to_high_model = AdcNonlinearModel(29.398, -304.0, 50),
@@ -43,15 +53,23 @@ ob_calibration_em = ObCalibration(
     model_id = 4,
     model_name = "EM",
 
-    heatsink_temperature_model = Pt1000Model(10046, 1006),
-    swir_temperature_model = Pt1000Model(9906, 988),
-
     swir_chop_target = 5000,
     mwir_chop_target = 15000,
 
     swir_wavelength_model = LinearModel(0.1218, 680.9),
     mwir_wavelength_model = LinearModel(0.2220, 1192.9),
+
+    heatsink_temperature_model = Pt1000Model(10046, 1006),
+    swir_temperature_model = Pt1000Model(9906, 988),
     eb_peltier_temperature_model = TecThermistorModel(4990, 1.364e-4, -3.758e-2, 8.153),
+    digital_temperature_model = Pt1000Model(1000, 1060.74),
+    detector_temperature_model = Pt1000Model(1000, 1079.80),
+    mechanism_temperature_model = Pt1000Model(1000, 1042.92),
+    motor_temperature_model = Pt1000Model(1000, 1017.55),
+
+    voltage_3v3_model = LinearModel(1.0445e-4, 0),
+    voltage_1v5_model = LinearModel(5.2413e-5, 0),
+    mechanism_current_model = LinearModel(3.3897e-6, 0),
 
     swir_low_to_medium_model = AdcNonlinearModel(27.873, 7653.9, 145),
     swir_medium_to_high_model = AdcNonlinearModel(28.208, 8561.3, 208),
