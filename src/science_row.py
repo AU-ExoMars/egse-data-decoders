@@ -152,7 +152,7 @@ class TimestampedScienceRow(ScienceRow):
     timestamp: float|None = None
 
     def __init__(self,
-        src_row: ScienceRow|ObScienceDataPacket|EbScienceRow|None = None,
+        src_row: ScienceRow|ObScienceDataPacket|EbScienceRow,
         src_header: EbScienceDataPacket|None = None,
         timestamp: float|None = None,
     ) -> None:
@@ -183,10 +183,10 @@ class ProcessedScienceRow(TimestampedScienceRow):
     mwir_end_temperature: float|None = None
 
     def __init__(self,
-        src_row: ScienceRow|ObScienceDataPacket|EbScienceRow|None = None,
+        ob_calibration: ObCalibration,
+        src_row: ScienceRow|ObScienceDataPacket|EbScienceRow,
         src_header: EbScienceDataPacket|None = None,
         timestamp: float|None = None,
-        ob_calibration: ObCalibration|None = None,
     ) -> None:
         """Post-process of data to real-world values.
 
@@ -196,52 +196,51 @@ class ProcessedScienceRow(TimestampedScienceRow):
         """
         super().__init__(src_row, src_header, timestamp)
 
-        if ob_calibration is not None:
-            self.swir_wavelength = ob_calibration.swir_wavelength_model(
-                self.MTR_ABS_STEPS
+        self.swir_wavelength = ob_calibration.swir_wavelength_model(
+            self.MTR_ABS_STEPS
+        )
+        self.mwir_wavelength = ob_calibration.mwir_wavelength_model(
+            self.MTR_ABS_STEPS
+        )
+
+        self.swir_start_temperature = ob_calibration.swir_temperature_model(
+            self.SWIR_START_TEMP
+        )
+        self.heatsink_start_temperature = ob_calibration.heatsink_temperature_model(
+            self.HEATSINK_START_TEMP
+        )
+        self.mwir_start_temperature = ob_calibration.eb_peltier_temperature_model(
+            self.MWIR_START_TEMP
+        )
+
+        self.swir_end_temperature = ob_calibration.swir_temperature_model(
+            self.SWIR_END_TEMP
+        )
+        self.heatsink_end_temperature = ob_calibration.heatsink_temperature_model(
+            self.HEATSINK_END_TEMP
+        )
+        self.mwir_end_temperature = ob_calibration.eb_peltier_temperature_model(
+            self.MWIR_END_TEMP
+        )
+
+        if self.SWIR_HIGH < ob_calibration.max_usable_adc_value:
+            self.swir_scaled_dn = self.SWIR_HIGH
+        elif self.SWIR_MED < ob_calibration.max_usable_adc_value:
+            self.swir_scaled_dn = ob_calibration.swir_medium_to_high_model(
+                self.SWIR_MED
             )
-            self.mwir_wavelength = ob_calibration.mwir_wavelength_model(
-                self.MTR_ABS_STEPS
+        else:
+            self.swir_scaled_dn = ob_calibration.swir_medium_to_high_model(
+                ob_calibration.swir_low_to_medium_model(self.SWIR_LOW)
             )
 
-            self.swir_start_temperature = ob_calibration.swir_temperature_model(
-                self.SWIR_START_TEMP
+        if self.MWIR_HIGH < ob_calibration.max_usable_adc_value:
+            self.mwir_scaled_dn = self.MWIR_HIGH
+        elif self.MWIR_MED < ob_calibration.max_usable_adc_value:
+            self.mwir_scaled_dn = ob_calibration.mwir_medium_to_high_model(
+                self.MWIR_MED
             )
-            self.heatsink_start_temperature = ob_calibration.heatsink_temperature_model(
-                self.HEATSINK_START_TEMP
+        else:
+            self.mwir_scaled_dn = ob_calibration.mwir_medium_to_high_model(
+                ob_calibration.mwir_low_to_medium_model(self.MWIR_LOW)
             )
-            self.mwir_start_temperature = ob_calibration.eb_peltier_temperature_model(
-                self.MWIR_START_TEMP
-            )
-
-            self.swir_end_temperature = ob_calibration.swir_temperature_model(
-                self.SWIR_END_TEMP
-            )
-            self.heatsink_end_temperature = ob_calibration.heatsink_temperature_model(
-                self.HEATSINK_END_TEMP
-            )
-            self.mwir_end_temperature = ob_calibration.eb_peltier_temperature_model(
-                self.MWIR_END_TEMP
-            )
-
-            if self.SWIR_HIGH < ob_calibration.max_usable_adc_value:
-                self.swir_scaled_dn = self.SWIR_HIGH
-            elif self.SWIR_MED < ob_calibration.max_usable_adc_value:
-                self.swir_scaled_dn = ob_calibration.swir_medium_to_high_model(
-                    self.SWIR_MED
-                )
-            else:
-                self.swir_scaled_dn = ob_calibration.swir_medium_to_high_model(
-                    ob_calibration.swir_low_to_medium_model(self.SWIR_LOW)
-                )
-
-            if self.MWIR_HIGH < ob_calibration.max_usable_adc_value:
-                self.mwir_scaled_dn = self.MWIR_HIGH
-            elif self.MWIR_MED < ob_calibration.max_usable_adc_value:
-                self.mwir_scaled_dn = ob_calibration.mwir_medium_to_high_model(
-                    self.MWIR_MED
-                )
-            else:
-                self.mwir_scaled_dn = ob_calibration.mwir_medium_to_high_model(
-                    ob_calibration.mwir_low_to_medium_model(self.MWIR_LOW)
-                )
