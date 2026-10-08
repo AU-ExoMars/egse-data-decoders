@@ -103,8 +103,6 @@ class EbHkPacket(EbTmPacket):
     for decoding.
     """
 
-    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_hk)
-
     # FIXME - this shouldn't be needed, but there's a bug in both
     # BSW and ASW which reports packet sizes incorrectly.
     # Confirmed in 2026-09-17 mail from Ben.
@@ -137,10 +135,12 @@ class EbHkPacket(EbTmPacket):
 
 class EbRegularHkPacket(EbHkPacket):
     """Subclass for regular HKs."""
+    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_hk)
     typeId: ClassVar[int] = 0b000001
 
 class EbResponseHkPacket(EbHkPacket):
     """Subclass for response HKs."""
+    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_hk)
     typeId: ClassVar[int] = 0b000010
 
 class EbPostHkPacket(EbTmPacket):
