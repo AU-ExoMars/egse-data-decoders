@@ -92,7 +92,8 @@ class EbTmPacket(BitstructTemplateClass):
             self.header = EbTmHeader(packet=kwargs["packet"][:EbTmHeader.min_length_bytes])
             self.lobt = self.header.lobt
 
-        if self.header is not None and (not hasattr(self, "typeId") or self.header.tmTypeId != self.typeId):
+        if self.header is not None and hasattr(self, "typeId") and self.header.tmTypeId != self.typeId:
+            print(self.__class__, self.typeId, self.header.tmTypeId)
             raise EbTmPacketException("Type ID does not match")
 
 class EbHkPacket(EbTmPacket):
@@ -102,6 +103,10 @@ class EbHkPacket(EbTmPacket):
     class, should we need anything extra, but use the derived classes
     for decoding.
     """
+
+    # Even though we shouldn't actually do a decode at this level,
+    # we need the template so that ProcessedEbHk gets its fields.
+    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_hk)
 
     # FIXME - this shouldn't be needed, but there's a bug in both
     # BSW and ASW which reports packet sizes incorrectly.
