@@ -10,19 +10,22 @@ the subclass might wish to do.
 """
 
 import binascii
-import tmstruct as tm
 from typing import ClassVar
 
-from bitstruct_template_class import BitstructTemplateClass, BitstructTemplateException
+import tmstruct as tm
+from bitstruct_template_class import BitstructTemplateClass, BitstructTemplateError
 
 # EB HKs embed an OB HK. If we decode that here, we
 # get CRC checking of the OB data for free.
 from ob_tm_packet import ObHkPacket
 
-class EbTmPacketException(BitstructTemplateException):
+
+class EbTmPacketError(BitstructTemplateError):
     pass
 
 class EbTmHeader(BitstructTemplateClass):
+    decoder: ClassVar[bool] = True
+
     # Oddly, tmstruct doesn't have a broken out TM header described. I'll
     # break my self-imposed rule and put it here.
     template: ClassVar[list[tuple[str, str]]] = [
@@ -40,11 +43,12 @@ class EbTmHeader(BitstructTemplateClass):
 
     lobt: float|None
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def _decode(self, data: bytes) -> bytes:
+        data = super()._decode(data)
 
-        if self.lobtInt is not None and self.lobtFrac is not None:
-            self.lobt = self.lobtInt + self.lobtFrac/65536.0
+        self.lobt = self.lobtInt + self.lobtFrac/65536.0
+
+        return data
 
 class EbTmPacket(BitstructTemplateClass):
     """The base class for TMs.
@@ -64,37 +68,30 @@ class EbTmPacket(BitstructTemplateClass):
 
     lobt: float|None
 
-    @classmethod
-    def frombinary(cls, data):
-        header = EbTmHeader(packet=data[:EbTmHeader.min_length_bytes])
-        if header.magic != cls.MAGIC:
-            raise EbTmPacketException("Incorrect packet magic number")
-        try:
-            ret = super().frombinary(data[:EbTmHeader.min_length_bytes + header.blockLen])
+    def _decode(self, data: bytes) -> bytes:
+        header = EbTmHeader.frombinary(data[:EbTmHeader.min_length_bytes])
+        if header.magic != self.MAGIC:
+            raise EbTmPacketError("Incorrect packet magic number")
 
-            # If no exception has been raised, store the raw packet
-            # data and return the object.
-            ret.raw = data
+        if header.tmTypeId != self.typeId:
+            raise EbTmPacketError("Incorrect type ID")
 
-            return ret
-        except BitstructTemplateException as e:
-            raise EbTmPacketException(f"No subclass accepted this packet (type ID={header.tmTypeId}, data length={header.blockLen})") from e
+        data = super()._decode(data[:EbTmHeader.min_length_bytes + header.blockLen])
+
+        # If no exception has been raised, store the raw packet
+        # data and return the object.
+        self.raw = data
+
+        self.header = header
+        self.lobt = self.header.lobt
+
+        return data
 
     @classmethod
     def strip_padding(cls, template: list[tuple[str, str]], name="PADDING"):
         if template[-1][0] == name:
             template.pop()
         return template
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        if kwargs.get("packet", None) is not None:
-            self.header = EbTmHeader(packet=kwargs["packet"][:EbTmHeader.min_length_bytes])
-            self.lobt = self.header.lobt
-
-        if self.header is not None and hasattr(self, "typeId") and self.header.tmTypeId != self.typeId:
-            print(self.__class__, self.typeId, self.header.tmTypeId)
-            raise EbTmPacketException("Type ID does not match")
 
 class EbHkPacket(EbTmPacket):
     """Base class for HK packets.
@@ -104,8 +101,9 @@ class EbHkPacket(EbTmPacket):
     for decoding.
     """
 
-    # Even though we shouldn't actually do a decode at this level,
-    # we need the template so that ProcessedEbHk gets its fields.
+    # Even though we don't actually do a decode at this level,
+    # we'll put the template here, since it's common across regular and
+    # response HK's
     template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_hk)
 
     # FIXME - this shouldn't be needed, but there's a bug in both
@@ -117,52 +115,49 @@ class EbHkPacket(EbTmPacket):
     calculated_crc: int|None = None
     ob_hk: ObHkPacket|None = None
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def _decode(self, data) -> bytes:
+        data = super()._decode(data)
 
-        if kwargs.get("packet", None) is not None:
-            # Validate CRCs
-            length = self.byte_offset_of("HK_PACKET_CRC")
-            self.calculated_crc = self.crc16(kwargs["packet"][:length])
-            self.crc_valid = self.calculated_crc == self.HK_PACKET_CRC
+        # Validate CRCs
+        length = self.byte_offset_of("HK_PACKET_CRC")
+        self.calculated_crc = self.crc16(data[:length])
+        self.crc_valid = self.calculated_crc == self.HK_PACKET_CRC
 
-            # It's not absolutely obvious to me that the OB_* fields will
-            # definitely be populated once we're running ASW. Rather than
-            # using only CURRENT_OPERATING_STATE, let's also use the presence
-            # of all zeros in the relevant area of the packet as a signal.
-            if self.CURRENT_OPERATING_STATE in (4, 8):
-                obpacket = kwargs["packet"][self.byte_offset_of("OB_HK_ID"):self.byte_offset_of("OB_HK_CRC8")+1]
-                if sum(obpacket) != 0:
-                    self.ob_hk = ObHkPacket.frombinary(obpacket)
+        # It's not absolutely obvious to me that the OB_* fields will
+        # definitely be populated once we're running ASW. Rather than
+        # using only CURRENT_OPERATING_STATE, let's also use the presence
+        # of all zeros in the relevant area of the packet as a signal.
+        if self.CURRENT_OPERATING_STATE in (4, 8):
+            obpacket = data[self.byte_offset_of("OB_HK_ID"):self.byte_offset_of("OB_HK_CRC8")+1]
+            if sum(obpacket) != 0:
+                self.ob_hk = ObHkPacket.frombinary(obpacket)
+
+        return data
 
     def crc16(self, data: bytes):
         return binascii.crc_hqx(data, 0xFFFF)
 
 class EbRegularHkPacket(EbHkPacket):
     """Subclass for regular HKs."""
-    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_hk)
+    decoder: ClassVar[bool] = True
     typeId: ClassVar[int] = 0b000001
 
 class EbResponseHkPacket(EbHkPacket):
     """Subclass for response HKs."""
-    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_hk)
+    decoder: ClassVar[bool] = True
     typeId: ClassVar[int] = 0b000010
 
 class EbPostHkPacket(EbTmPacket):
     """Subclass for power on self test HK."""
 
+    decoder: ClassVar[bool] = True
     typeId: ClassVar[int] = 0b000011
     template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.post_hk)
-
-    def __init__(self, **kwargs):
-        try:
-            super().__init__(**kwargs)
-        except Exception as e:
-            raise
 
 class EbDumpDataPacket(EbTmPacket):
     """Subclass for dump data packets."""
 
+    decoder: ClassVar[bool] = True
     template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.dump_data, "DUMP_DATA")
     typeId: ClassVar[int] = 0b000100
 
@@ -171,20 +166,24 @@ class EbDumpDataPacket(EbTmPacket):
 
     DUMP_DATA: bytes|None
 
-    def __init__(self, **kwargs):
-        try:
-            super().__init__(**kwargs)
-            if kwargs.get("packet", None) is not None:
-                if len(kwargs["packet"]) < self.header.min_length_bytes + self.header.blockLen:
-                    raise EbTmPacketException("Packet too short")
-                if len(kwargs["packet"]) > self.header.min_length_bytes + self.header.blockLen:
-                    raise EbTmPacketException("Packet too long")
-                self.DUMP_DATA = kwargs["packet"][self.min_length_bytes:]
-        except Exception as e:
-            raise
+    def _decode(self, data: bytes) -> bytes:
+        # EbTmPacket will have stripped padding off.
+        data = super()._decode(data)
+
+        if len(data) < self.header.min_length_bytes + self.header.blockLen:
+            raise EbTmPacketError("Packet too short")
+
+        if len(data) > self.header.min_length_bytes + self.header.blockLen:
+            raise EbTmPacketError("Packet too long")
+
+        # Copy it over.
+        self.DUMP_DATA = data[self.min_length_bytes:]
+
+        return data
 
 class EbScienceRow(BitstructTemplateClass):
     """A single row of science data"""
+    decoder: ClassVar[bool] = True
     template: ClassVar[list[tuple[str, str]]] = tm.sci_data
 
     # We'll be handing this the full array of data, so
@@ -201,39 +200,44 @@ class EbScienceDataPacket(EbTmPacket):
     # Science data is variable-length, so we can't use strict checking.
     strict_length_checking: ClassVar[bool] = False
 
+    # Define the template at this level, but it's the subclasses
+    # that declare themselves to be decoders.
+    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_sci, name="SCI_DATA")
+
     measurements: list[EbScienceRow] | None
     start_time: float | None
     end_time: float | None
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def _decode(self, data: bytes) -> bytes:
+        data = super()._decode(data)
 
-        if kwargs.get("packet", None) is not None:
-            # The science rows themselves need decoding. Run through the
-            # data, creating new EbScienceRow objects.
-            self.measurements = []
+        # The science rows themselves need decoding. Run through the
+        # data, creating new EbScienceRow objects.
+        self.measurements = []
 
-            # Extract the part of the packet that should contain science
-            # rows. This should be a multiple of the row size. We get
-            # that check for free in EbScienceRow.frombinary, which will
-            # raise an exception if the last chunk of data is too short.
-            science = kwargs["packet"][self.min_length_bytes:self.header.blockLen]
-            while len(science) > 0:
-                # Extract the first row from the data, then strip it
-                # off the front.
-                self.measurements.append(EbScienceRow.frombinary(science))
-                science = science[EbScienceRow.min_length_bytes:]
+        # Extract the part of the packet that should contain science
+        # rows. This should be a multiple of the row size. We get
+        # that check for free in EbScienceRow.frombinary, which will
+        # raise an exception if the last chunk of data is too short.
+        science = data[self.min_length_bytes:self.header.blockLen]
+        while len(science) > 0:
+            # Extract the first row from the data, then strip it
+            # off the front.
+            self.measurements.append(EbScienceRow.frombinary(science))
+            science = science[EbScienceRow.min_length_bytes:]
 
-            # Decode start and end times to floating point seconds.
-            self.start_time = self.START_TIME_S + self.START_TIME_MS / 1000
-            self.end_time = self.END_TIME_S + self.END_TIME_MS / 1000
+        # Decode start and end times to floating point seconds.
+        self.start_time = self.START_TIME_S + self.START_TIME_MS / 1000
+        self.end_time = self.END_TIME_S + self.END_TIME_MS / 1000
+
+        return data
 
 class EbScienceDataCPacket(EbScienceDataPacket):
     """Subclass for critical science packets.
 
     This just inherits from ScienceDataPacket and specifies the relevant type Id.
     """
-    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_sci, name="SCI_DATA")
+    decoder: ClassVar[bool] = True
     typeId: ClassVar[int] = 0b000101
 
 class EbScienceDataNcPacket(EbScienceDataPacket):
@@ -241,6 +245,5 @@ class EbScienceDataNcPacket(EbScienceDataPacket):
 
     This just inherits from ScienceDataPacket and specifies the relevant type Id.
     """
-    template: ClassVar[list[tuple[str, str]]] = EbTmPacket.strip_padding(tm.eb_sci, name="SCI_DATA")
+    decoder: ClassVar[bool] = True
     typeId: ClassVar[int] = 0b000110
-
