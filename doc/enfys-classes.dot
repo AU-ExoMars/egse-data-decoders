@@ -14,12 +14,15 @@ postproc: unflatten | dot -Tpng
 display: feh --scale-down -g 2560x720 -Z -
 pipe: "{{ postproc }}{% if stdout.isatty() %} | {{display}}{% endif %}"
 
+show_tcs: true
+
 calibration: cyan
 science_data: yellow
 processed_eb_hk: orange
 processed_ob_hk: darkorange
 raw_eb: seagreen
 raw_ob: darkseagreen
+eb_tc: salmon
 uses: green
 contains: red
 instance: blue
@@ -50,11 +53,11 @@ digraph classes {
             {{node("EbCalibration", done=True)}};
             {{node("ObCalibration", done=True)}};
         }
-        subgraph calsub {
-            rank=same;
+        {
             {{node("eb_calibration_em", done=True)}};
             {{node("ob_calibration_bb2", done=True)}};
             {{node("ob_calibration_em", done=True)}};
+            rank=same;
         }
     }
 
@@ -73,7 +76,7 @@ digraph classes {
         cluster=true;
         style=invis;
         {{node("TimestampedEbHk", done=True)}};
-        {{node("ProcessedEbHk")}};
+        {{node("ProcessedEbHk", done=True)}};
         {{node("EbHkDataSet")}};
     }
 
@@ -91,10 +94,14 @@ digraph classes {
         style=invis;
         node [fillcolor="{{raw_ob}}", style=filled];
         {{node("ObTmPacket", done=True)}};
-        {{node("ObHkPacket", done=True)}};
-        {{node("ObScienceDataPacket", done=True)}};
-        {{node("ObAckPacket", done=True)}};
-        {{node("ObNackPacket", done=True)}};
+        {{node("ObTmPacketWithCrc", done=True)}};
+        {
+            {{node("ObHkPacket", done=True)}};
+            {{node("ObScienceDataPacket", done=True)}};
+            {{node("ObAckPacket", done=True)}};
+            {{node("ObNackPacket", done=True)}};
+            rank = same;
+        }
     }
 
     subgraph EB {
@@ -118,6 +125,7 @@ digraph classes {
         {{node("EbScienceDataCPacket", done=True)}};
         {{node("EbScienceDataNcPacket", done=True)}};
     }
+
 
     // Calibration data for the various instruments.
     EbCalibration -> dataclass;
@@ -158,10 +166,11 @@ digraph classes {
     ProcessedScienceRow -> { ob_calibration_bb2, ob_calibration_em } [color={{uses}}];
 
     // Serial packets from the OB.
-    ObTmPacket -> BitstructTemplateClass
-    ObScienceDataPacket -> ObTmPacket;
-    ObHkPacket -> ObTmPacket;
-    ObAckPacket -> ObTmPacket;
+    ObTmPacket -> BitstructTemplateClass;
+    ObTmPacketWithCrc -> ObTmPacket;
+    ObScienceDataPacket -> ObTmPacketWithCrc;
+    ObHkPacket -> ObTmPacketWithCrc;
+    ObAckPacket -> ObTmPacketWithCrc;
     ObNackPacket -> ObTmPacket;
 
 
@@ -186,6 +195,68 @@ digraph classes {
     EbScienceDataCPacket -> EbScienceDataPacket;
     EbScienceDataNcPacket -> EbScienceDataPacket;
 
+{% if show_tcs %}
+    // This is a bit mad wide and not particularly useful for
+    // documentation, but the "is it done" colouring is useful
+    // for tracking work, so I'm making it conditional.
+    subgraph EB_TC {
+        cluster=true;
+        style=invis;
+        node [fillcolor="{{eb_tc}}", style=filled];
+
+        {{node("EbTcHeader")}};
+        {{node("EbTcPacket")}};
+        {{node("EbTcRet")}};
+        {{node("EbTcRequestHk")}};
+        {{node("EbTcPatch")}};
+        {{node("EbTcPatchSingle")}};
+        {{node("EbTcPatchInitialise")}};
+        {{node("EbTcPatchContinuation")}};
+        {{node("EbTcPatchFinalise")}};
+        {{node("EbTcDump")}};
+        {{node("EbTcSetHkRate")}};
+        {{node("EbTcMonitorAddr")}};
+        {{node("EbTcAbort")}};
+        {{node("EbTcGenericTc")}};
+        {{node("EbTcSafe")}};
+        {{node("EbTcStandby")}};
+        {{node("EbTcAcquisition")}};
+        {{node("EbTcSetMotorConfigs")}};
+        {{node("EbTcSetHeaterConfigs")}};
+        {{node("EbTcSetAcqConfigs")}};
+        {{node("EbTcSetTecSetpoint")}};
+        {{node("EbTcSetFdirLimits")}};
+        {{node("EbTcEnMechBoard")}};
+        {{node("EbTcEnDetBoard")}};
+        {{node("EbTcEnMechHeater")}};
+        {{node("EbTcEnDetHeater")}};
+        {{node("EbTcEnOb5V")}};
+        {{node("EbTcObPark")}};
+        {{node("EbTcObHoming")}};
+        {{node("EbTcObHk")}};
+        {{node("EbTcCheckMemory")}};
+        {{node("EbTcGoto")}};
+        {{node("EbTcCopyMemory")}};
+        {{node("EbTcSwitchRs422")}};
+        {{node("EbTcSetTecCurrent")}};
+    }
+
+    { EbTcHeader, EbTcPacket } -> BitstructTemplateClass;
+    { 
+        EbTcRet, EbTcRequestHk, EbTcPatch, EbTcDump, EbTcSetHkRate,
+        EbTcMonitorAddr, EbTcAbort, EbTcGenericTc, EbTcSafe, EbTcStandby,
+        EbTcAcquisition, EbTcSetMotorConfigs, EbTcSetHeaterConfigs,
+        EbTcSetAcqConfigs, EbTcSetTecSetpoint, EbTcSetFdirLimits, EbTcEnMechBoard,
+        EbTcEnDetBoard, EbTcEnMechHeater, EbTcEnDetHeater, EbTcEnOb5V, EbTcObPark,
+        EbTcObHoming, EbTcObHk, EbTcCheckMemory, EbTcGoto, EbTcCopyMemory,
+        EbTcSwitchRs422, EbTcSetTecCurrent
+    } -> EbTcPacket;
+    { 
+        EbTcPatchSingle, EbTcPatchInitialise, 
+        EbTcPatchContinuation, EbTcPatchFinalise 
+    } -> EbTcPatch;
+{% endif %}
+
     subgraph key {
         cluster=true;
         rank=same;
@@ -204,6 +275,9 @@ digraph classes {
         obhkp [label="Processed\nOB HK Data", fillcolor="{{processed_ob_hk}}", style=filled];
         ebraw [label="Raw EB\nTM data", fillcolor="{{raw_eb}}", style=filled];
         obraw [label="Raw OB\nTM data", fillcolor="{{raw_ob}}", style=filled];
+        {% if show_tcs %}
+        obraw [label="EB TC\npacket", fillcolor="{{eb_tc}}", style=filled];
+        {% endif %}
 
         // This is horrible, but the easiest way of placing the key is
         // to link one of its nodes to another node in the graph with
