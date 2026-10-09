@@ -23,11 +23,13 @@ This allows very simple decode operations, such as:
       print(hk.SWIR_OFFSET)
 
 """
-import bitstruct
 import copy
 import typing
 
+import bitstruct
+
 from binary_decoder_class import BinaryDecoderClass, BinaryDecoderError
+
 
 class BitstructTemplateError(BinaryDecoderError):
     """For signalling within BitstructTemplateClass."""
@@ -149,7 +151,16 @@ class BitstructTemplateClass(BinaryDecoderClass):
                     pass
                 cls._fields[name] = (None, None, simple)
 
-    def _decode(self, data: bytes) -> None:
+    def _decode(self, data: bytes) -> bytes:
+        """Decode the data using the template.
+
+        The main point is to store attributes into "self".
+
+        The method returns "data" (in this case unmodified).
+        This gives subclasses in the hierarchy the chance to
+        modify the data (e.g. stripping padding) as things pass
+        up and down.
+        """
         # Check it's the right length before
         # attempting a decode.
         if len(data) < self.start_byte + self.min_length_bytes:
@@ -169,10 +180,12 @@ class BitstructTemplateClass(BinaryDecoderClass):
         for i, value in enumerate(unpacked):
             setattr(self, self.template[i][0], value)
 
+        return data
+
     def __init__(self, src: "BitstructTemplateClass|None" = None, **kwargs: typing.Any) -> None:
         """Class constructor.
 
-        If a src is given, copy its inheritable attributes over to self. 
+        If a src is given, copy its inheritable attributes over to self.
         This is used as a copy constructor for initialising subclasses.
 
         Entries in kwargs are examined and used to fill out class
@@ -183,7 +196,6 @@ class BitstructTemplateClass(BinaryDecoderClass):
         received packet; an object from plain data (no supplied packet) and
         objects of e.g. further derived types.
         """
-
         if src is not None:
             # I originally checked that self was an instance of a class
             # derived from src. But EB science rows have a different
@@ -194,7 +206,9 @@ class BitstructTemplateClass(BinaryDecoderClass):
             # that src does.
             for name in src._fields:
                 if name not in self._fields:
-                        raise BitstructTemplateError(f"{src.type_name} has attributes (e.g. {name}) not present in {self.type_name}")
+                    raise BitstructTemplateError(
+                        f"{src.type_name} has attributes (e.g. {name}) not present in {self.type_name}"
+                    )
                 setattr(self, name, copy.deepcopy(getattr(src, name)))
 
         # If any kwargs have been supplied, examine them.
@@ -208,17 +222,20 @@ class BitstructTemplateClass(BinaryDecoderClass):
             # OK, everything looks OK, so set the class attribute.
             setattr(self, attr, value)
 
-    def bit_size_of(self, attr):
+    def bit_size_of(self, attr: str) -> int:
+        """Return the size, in bits, of the named attribute."""
         if attr not in self._fields:
             raise RuntimeError(f"{attr} is not present in {self.type_name}")
         return self._fields[attr][1]
 
-    def bit_offset_of(self, attr):
+    def bit_offset_of(self, attr: str) -> int:
+        """Return the offset, in bits, of the named attribute."""
         if attr not in self._fields:
             raise RuntimeError(f"{attr} is not present in {self.type_name}")
         return self._fields[attr][0]
 
-    def byte_offset_of(self, attr):
+    def byte_offset_of(self, attr: str) -> int:
+        """Return the offset, in bytes, of the named attribute."""
         if attr not in self._fields:
             raise RuntimeError(f"{attr} is not present in {self.type_name}")
         return self._fields[attr][0] // 8
@@ -296,6 +313,7 @@ if __name__ == "__main__":
 
     class SubBtcTest(BtcTest):
         """Example subclass."""
+
         extra: float|None = None
 
     # The "X" should be skipped because of start_byte.
