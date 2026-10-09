@@ -1,9 +1,9 @@
 """Post-processing of EB HK data"""
 
 from eb_tm_packet import EbHkPacket, EbRegularHkPacket, EbResponseHkPacket
+from enfys_calibration import EbCalibration, ObCalibration
 from ob_hk import ProcessedObHk
 
-from enfys_calibration import EbCalibration, ObCalibration
 
 class TimestampedEbHk(EbHkPacket):
     """An EB HK packet with added timestamp.
