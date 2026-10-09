@@ -11,22 +11,28 @@ BitstructTemplateClass, supplying a tmstruct template, and the
 resulting subclass gets a bunch of attributes whose names match
 the tmstruct template names.
 
-The base class also provides a constructor which can use a supplied
-packet to initialise those attributes. This allows very simple
-decode operations, such as:
+The base class also provides a "frombinary" method which can
+use a supplied and the class hierarchy to parse the packet and
+return an object. There's also a "fromhex" method which parses
+a few of the hex dump formats we've got floating around.
 
-  hk = HkPacket(packet)
-  print(hk.SWIR_OFFSET)
+This allows very simple decode operations, such as:
+
+  hk = ObTmPacket.fromhex(hexdata)
+  if isinstance(hk, ObHkPacket):
+      print(hk.SWIR_OFFSET)
 
 """
 import bitstruct
 import copy
 import typing
 
-class BitstructTemplateException(Exception):
-    pass
+from binary_decoder_class import BinaryDecoderClass, BinaryDecoderError
 
-class BitstructTemplateClass:
+class BitstructTemplateError(BinaryDecoderError):
+    """For signalling within BitstructTemplateClass."""
+
+class BitstructTemplateClass(BinaryDecoderClass):
     """A base class which can be subclassed using a "tmstruct" template.
 
     The OB EGSE has a nice set of definitions with its tmstruct.py, these
@@ -35,9 +41,6 @@ class BitstructTemplateClass:
     __init_subclass__ method which will examine a tmstruct-style template
     (specified as a class variable) and generate class attributes to hold
     the values (setting them to None in the first instance).
-
-    The class also provides a constructor which can decode packet data using
-    the supplied template, populating the various attributes.
 
     For convienience, a "fields" attribute is provided. This is a list of
     attribute names whose types are "simple" (as defined in "simple_types"
@@ -55,7 +58,7 @@ class BitstructTemplateClass:
         class HkPacket(BitstructTemplateClass):
             template = tmstruct.hk
 
-        decoded = HkPacket(packet_data)
+        decoded = HkPacket.frombinary(packet_data)
         print(decoded)
 
     """
@@ -76,6 +79,8 @@ class BitstructTemplateClass:
         storing information about sizing and offsets (for possible use by
         class users) and building a bitstruct format string.
         """
+        # Pass up to the parent class.
+        super().__init_subclass__(**kwargs)
 
         # If the subclass doesn't have a template then we can't do any of
         # the below. Not necessarily an error - the subclass could be an
@@ -144,52 +149,42 @@ class BitstructTemplateClass:
                     pass
                 cls._fields[name] = (None, None, simple)
 
-    def __init__(self, packet: bytes|None = None, src: "BitstructTemplateClass|None" = None, **kwargs: typing.Any) -> None:
+    def _decode(self, data: bytes) -> None:
+        # Check it's the right length before
+        # attempting a decode.
+        if len(data) < self.start_byte + self.min_length_bytes:
+            raise BitstructTemplateError("Packet too short")
+
+        # By default, we check exact length, but if the class unsets
+        # strict_length_checking, then we only check for minimum length.
+        # Some packet types are variable length, so we have to relax the
+        # check in those cases.
+        if self.strict_length_checking and len(data) > self.start_byte + self.min_length_bytes:
+            raise BitstructTemplateError("Packet too long")
+
+        # Decode according to the bitstruct format string.
+        unpacked = bitstruct.unpack(self.bitstruct_fmt, data[self.start_byte:])
+
+        # Store the unpacked data into the class attributes.
+        for i, value in enumerate(unpacked):
+            setattr(self, self.template[i][0], value)
+
+    def __init__(self, src: "BitstructTemplateClass|None" = None, **kwargs: typing.Any) -> None:
         """Class constructor.
 
-        If a packet is given, then the information derived from
-        the class template string is used to decode it and populate
-        attributes.
-
-        Otherwise, if a src is given, copy its inheritable attributes
-        over to self. This is used as a copy constructor for initialising
-        subclasses.
+        If a src is given, copy its inheritable attributes over to self. 
+        This is used as a copy constructor for initialising subclasses.
 
         Entries in kwargs are examined and used to fill out class
         attributes, allowing initialisation of "augmented" sub-classes.
-        While iterating kwargs, checks are performed to ensure that the
-        specified attribute is both present and not decoded from any
-        supplied packet.
 
         I think this covers all bases: you can create an un-initialised
         object, where all attributes are None; an object extracted from a
         received packet; an object from plain data (no supplied packet) and
         objects of e.g. further derived types.
         """
-        if packet is not None and src is not None:
-            raise RuntimeError("Only one of 'packet' and 'src' may be provided")
 
-        if packet is not None:
-            # If a packet was supplied, check it's the right length before
-            # attempting a decode.
-            if len(packet) < self.start_byte + self.min_length_bytes:
-                raise BitstructTemplateException("Packet too short")
-
-            # By default, we check exact length, but if the class unsets
-            # strict_length_checking, then we only check for minimum length.
-            # Some packet types are variable length, so we have to relax the
-            # check in those cases.
-            if self.strict_length_checking and len(packet) > self.start_byte + self.min_length_bytes:
-                raise BitstructTemplateException("Packet too long")
-
-            # Decode according to the bitstruct format string.
-            unpacked = bitstruct.unpack(self.bitstruct_fmt, packet[self.start_byte:])
-
-            # Store the unpacked data into the class attributes.
-            for i, value in enumerate(unpacked):
-                setattr(self, self.template[i][0], value)
-
-        elif src is not None:
+        if src is not None:
             # I originally checked that self was an instance of a class
             # derived from src. But EB science rows have a different
             # layout from OB science rows, which means they need to have
@@ -199,7 +194,7 @@ class BitstructTemplateClass:
             # that src does.
             for name in src._fields:
                 if name not in self._fields:
-                        raise BitstructTemplateException(f"{src.type_name} has attributes (e.g. {name}) not present in {self.type_name}")
+                        raise BitstructTemplateError(f"{src.type_name} has attributes (e.g. {name}) not present in {self.type_name}")
                 setattr(self, name, copy.deepcopy(getattr(src, name)))
 
         # If any kwargs have been supplied, examine them.
@@ -208,17 +203,7 @@ class BitstructTemplateClass:
             # "fields" list, raise an exception, rather than allowing
             # arbitrary members to be set via this avenue.
             if attr not in self._fields:
-                raise BitstructTemplateException(f"{attr} is not annotated or templated in this class")
-
-            # Raise an exception if a packet was supplied and the
-            # kwargs-supplied attribute would normally be derived from
-            # the packet data.
-            if (
-                    packet is not None and
-                    attr in self._fields and
-                    self._fields[attr][0] is not None
-            ):
-                raise BitstructTemplateException(f"{attr} was specified both in packet and kwargs")
+                raise BitstructTemplateError(f"{attr} is not annotated or templated in this class")
 
             # OK, everything looks OK, so set the class attribute.
             setattr(self, attr, value)
@@ -259,42 +244,6 @@ class BitstructTemplateClass:
         hex_data = [ "0" * (len(x) % 2)+x for x in hex_data ]
         hex_data = "".join(hex_data)
         return cls.frombinary(bytes.fromhex(hex_data))
-
-    @classmethod
-    def frombinary(cls, data: bytes):
-        def _recursive_subclasses(
-            cls: type[BitstructTemplateClass],
-            seen: set[type[BitstructTemplateClass]]|None = None
-        ) -> list[type[BitstructTemplateClass]]:
-            if seen is None:
-                seen = set()
-            elif cls in seen:
-                return []
-            seen.add(cls)
-            classes = [cls]
-            for c in cls.__subclasses__():
-                classes += _recursive_subclasses(c, seen)
-            return classes
-
-        for c in _recursive_subclasses(cls):
-            # As above, we use __dict__ rather than hasattr so that
-            # we don't offer data to subclasses of classes that define
-            # a template.  N.B. intentional use of __dict__ rather
-            # than hasattr. We only want to trigger decodes on precisely
-            # the classes that define templates, not ones which inherit from
-            # them.
-            if "template" in c.__dict__:
-                # We'll offer the data to each subclass, in turn, and
-                # the first one whose constructor accepts the data can
-                # have it. This does imply that constructors should be
-                # careful about what they accept. The base class
-                # constructor does length checking, but subclasses will
-                # likely need to do further checks.
-                try:
-                    return c(packet=data)
-                except BitstructTemplateException as e:
-                    pass
-        raise BitstructTemplateException("No subclass accepted this packet")
 
     """
     We'll allow dict-like retrieval from the class.
@@ -337,6 +286,7 @@ if __name__ == "__main__":
     class BtcTest(BitstructTemplateClass):
         """Example demonstrating usage of class."""
 
+        decoder: typing.ClassVar[bool] = True
         template: typing.ClassVar[list[tuple[str,str]]] = [
             ("arg1", "u3"),
             ("arg2", "u1"),
@@ -350,7 +300,7 @@ if __name__ == "__main__":
 
     # The "X" should be skipped because of start_byte.
     # "\x74" should decode to arg1=3, arg2=1, arg3=4
-    t = BtcTest(b"X\x74")
+    t = BtcTest.frombinary(b"X\x74")
     print(t)
 
     s = SubBtcTest(src=t, extra=1)

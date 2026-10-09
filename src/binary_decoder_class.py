@@ -90,5 +90,8 @@ class BinaryDecoderClass:
                     return ret
 
             return None
-        return _find_handler(cls)
+        ret = _find_handler(cls)
+        if ret is None:
+            raise BinaryDecoderError("No subclass accepted this data packet")
+        return ret
 
