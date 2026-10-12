@@ -93,6 +93,7 @@ class BitstructTemplateClass(BinaryDecoderClass):
         # Keep a record of sizes and offsets - subclasses may want
         # to do stuff with the data (e.g. CRC calculation).
         cls._fields = {}
+        cls._matchers = set()
 
         # We need to build the bitstruct format string from the template
         # definition.
@@ -100,7 +101,8 @@ class BitstructTemplateClass(BinaryDecoderClass):
         for name, fmt in cls.template:
             # Add a class attribute, with the specified name and a default
             # value.
-            setattr(cls, name, None)
+            if not hasattr(cls, name):
+                setattr(cls, name, None)
 
             # The offset of this item is the length of the
             # data consumed by the partially constructed bitstruct
@@ -136,7 +138,10 @@ class BitstructTemplateClass(BinaryDecoderClass):
         for name, value in typing.get_type_hints(cls).items():
             if not hasattr(cls, name):
                 setattr(cls, name, None)
-            if typing.get_origin(value) is not typing.ClassVar:
+            if typing.get_origin(value) is typing.ClassVar:
+                if name in cls._fields:
+                    cls._matchers.add(name)
+            else:
                 # I am not absolutely sure this is the correct
                 # way of doing things, but it matches everything
                 # I've tried to do so far.
@@ -178,7 +183,16 @@ class BitstructTemplateClass(BinaryDecoderClass):
 
         # Store the unpacked data into the class attributes.
         for i, value in enumerate(unpacked):
-            setattr(self, self.template[i][0], value)
+            name = self.template[i][0]
+            if name in self._matchers:
+                # Matchers are class variables which have the same name as
+                # template fields. When doing a decode, we check that the
+                # decoded value is the same as that of the class variable.
+                # If not, we raise an exception.
+                if value != getattr(self, name):
+                    raise BitstructTemplateError(f"Field {name} has an unexpected value")
+            else:
+                setattr(self, self.template[i][0], value)
 
         return data
 
@@ -205,22 +219,39 @@ class BitstructTemplateClass(BinaryDecoderClass):
             # instead we'll just validate that self has all the attributes
             # that src does.
             for name in src._fields:
+                value = getattr(src, name)
+
+                # Check that the source field is available.
                 if name not in self._fields:
                     raise BitstructTemplateError(
                         f"{src.type_name} has attributes (e.g. {name}) not present in {self.type_name}"
                     )
-                setattr(self, name, copy.deepcopy(getattr(src, name)))
+
+                # Check that the value obeys any matchers for this class.
+                if name in self._matchers and value != getattr(self, name):
+                    raise BitstructTemplateError(
+                        f"{src.__class__.__name__} has unacceptable attributes (e.g. {name}) for {self.__class__.__name__}"
+                    )
+
+                setattr(self, name, copy.deepcopy(value))
 
         # If any kwargs have been supplied, examine them.
-        for attr, value in kwargs.items():
+        for name, value in kwargs.items():
             # If the attribute name isn't actually present in the class
             # "fields" list, raise an exception, rather than allowing
             # arbitrary members to be set via this avenue.
-            if attr not in self._fields:
-                raise BitstructTemplateError(f"{attr} is not annotated or templated in this class")
+            if name not in self._fields:
+                raise BitstructTemplateError(f"{name} is not annotated or templated in this class")
+
+            # As above, check that any requested value actually satisfies
+            # constraints.
+            if name in self._matchers and value != getattr(self, name):
+                raise BitstructTemplateError(
+                    f"{name} has an unacceptable value for {self.__class__.__name__}"
+                )
 
             # OK, everything looks OK, so set the class attribute.
-            setattr(self, attr, value)
+            setattr(self, name, value)
 
     def bit_size_of(self, attr: str) -> int:
         """Return the size, in bits, of the named attribute."""
