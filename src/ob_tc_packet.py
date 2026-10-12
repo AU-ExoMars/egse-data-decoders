@@ -76,22 +76,18 @@ class ObTcPacket(BitstructTemplateClass):
     def tobinary(self) -> bytes:
         """Example convenience helper for BitstructClass.tobinary().
 
-        * If CMD_ID is not initialised, set it to the appropriate
-          value for this object.
-        * For each remaining field that's not already set, set it to zero.
+        * Store self.match_cmd_id into self.CMD_ID.
         * Get an initial encode using super().tobinary()
         * Use ObTcHeader to get a CRC from that
         * Call super().tobinary() again to get a correctly checksummed result.
         """
-        if self.CMD_ID is None:
-            self.CMD_ID = self.match_cmd_id
 
-        for k in self.keys():
-            if self[k] is None:
-                setattr(self, k, 0)
+        self.CMD_ID = self.match_cmd_id
 
         header = ObTcHeader.frombinary(super().tobinary())
+
         self.CRC = header.calculated_crc
+
         return super().tobinary()
 
 

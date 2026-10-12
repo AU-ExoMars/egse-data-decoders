@@ -245,9 +245,17 @@ class BitstructTemplateClass(BinaryDecoderClass):
 
         I never intended to implement encoding, but it's trivial to do.
         """
-        return bitstruct.pack(self.bitstruct_fmt, *[
-            self[k] for k, v in self._fields.items() if v[0] is not None
-        ])
+        # Horrible list comprehension. For each item which has an
+        # offset listed in self._fields, extract the attribute value
+        # from self. If that's None, replace it with 0.
+        values = [
+            self[k] if self[k] is not None else 0
+                for k, v in self._fields.items()
+                    if v[0] is not None
+        ]
+
+        # And hand it off to bitstruct to do the clever stuff.
+        return bitstruct.pack(self.bitstruct_fmt, *values)
 
     @property
     def type_name(self) -> str:
