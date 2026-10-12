@@ -68,21 +68,15 @@ class ObTcPacket(BitstructTemplateClass):
         self.crc_valid = header.crc_valid
         self.calculated_crc = header.calculated_crc
 
-        if header.CMD_ID != self.match_cmd_id:
-            raise ObTcPacketError("Command ID does not match")
-
         return super()._decode(data)
 
     def tobinary(self) -> bytes:
         """Example convenience helper for BitstructClass.tobinary().
 
-        * Store self.match_cmd_id into self.CMD_ID.
         * Get an initial encode using super().tobinary()
         * Use ObTcHeader to get a CRC from that
         * Call super().tobinary() again to get a correctly checksummed result.
         """
-
-        self.CMD_ID = self.match_cmd_id
 
         header = ObTcHeader.frombinary(super().tobinary())
 
@@ -95,105 +89,105 @@ class ObTcHkRequest(ObTcPacket):
     """An OB HK_REQUEST TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b0000
+    CMD_ID: ClassVar[int] = 0b0000
     template: ClassVar[list[tuple[str, str]]] = tc.ob_hk_request
 
 class ObTcClearErrors(ObTcPacket):
     """An OB CLEAR_ERRORS TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b0010
+    CMD_ID: ClassVar[int] = 0b0010
     template: ClassVar[list[tuple[str, str]]] = tc.ob_clear_errors
 
 class ObTcSetErrors(ObTcPacket):
     """An OB SET_ERRORS TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b0011
+    CMD_ID: ClassVar[int] = 0b0011
     template: ClassVar[list[tuple[str, str]]] = tc.ob_set_errors
 
 class ObTcPowerControl(ObTcPacket):
     """An OB POWER_CONTROL TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b0100
+    CMD_ID: ClassVar[int] = 0b0100
     template: ClassVar[list[tuple[str, str]]] = tc.ob_power_control
 
 class ObTcHeaterControl(ObTcPacket):
     """An OB HEATER_CONTROL TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b0101
+    CMD_ID: ClassVar[int] = 0b0101
     template: ClassVar[list[tuple[str, str]]] = tc.ob_heater_control
 
 class ObTcSetMechSp(ObTcPacket):
     """An OB SET_MECH_SP TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b0110
+    CMD_ID: ClassVar[int] = 0b0110
     template: ClassVar[list[tuple[str, str]]] = tc.ob_set_mech_sp
 
 class ObTcSetDetecSp(ObTcPacket):
     """An OB SET_DETEC_SP TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b0111
+    CMD_ID: ClassVar[int] = 0b0111
     template: ClassVar[list[tuple[str, str]]] = tc.ob_set_detec_sp
 
 class ObTcSetMtrParam(ObTcPacket):
     """An OB SET_MTR_PARAM TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b1000
+    CMD_ID: ClassVar[int] = 0b1000
     template: ClassVar[list[tuple[str, str]]] = tc.ob_set_mtr_param
 
 class ObTcMtrMovPos(ObTcPacket):
     """An OB MTR_MOV_POS TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b1001
+    CMD_ID: ClassVar[int] = 0b1001
     template: ClassVar[list[tuple[str, str]]] = tc.ob_mtr_mov_pos
 
 class ObTcMtrMovNeg(ObTcPacket):
     """An OB MTR_MOVE_NEG TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b1010
+    CMD_ID: ClassVar[int] = 0b1010
     template: ClassVar[list[tuple[str, str]]] = tc.ob_mtr_move_neg
 
 class ObTcMtrHalt(ObTcPacket):
     """An OB MTR_HALT TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b1011
+    CMD_ID: ClassVar[int] = 0b1011
     template: ClassVar[list[tuple[str, str]]] = tc.ob_mtr_halt
 
 class ObTcMtrHoming(ObTcPacket):
     """An OB MTR_HOMING TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b1100
+    CMD_ID: ClassVar[int] = 0b1100
     template: ClassVar[list[tuple[str, str]]] = tc.ob_mtr_homing
 
 class ObTcSetHkSamples(ObTcPacket):
     """An OB SET_HK_SAMPLES TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b1101
+    CMD_ID: ClassVar[int] = 0b1101
     template: ClassVar[list[tuple[str, str]]] = tc.ob_set_hk_samples
 
 class ObTcSciOffset(ObTcPacket):
     """An OB SCI_OFFSET TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b1110
+    CMD_ID: ClassVar[int] = 0b1110
     template: ClassVar[list[tuple[str, str]]] = tc.ob_sci_offset
 
 class ObTcSciRequest(ObTcPacket):
     """An OB SCI_REQUEST TC."""
 
     decoder: ClassVar[bool] = True
-    match_cmd_id: ClassVar[int] = 0b1111
+    CMD_ID: ClassVar[int] = 0b1111
     template: ClassVar[list[tuple[str, str]]] = tc.ob_sci_request
 
 if __name__ == "__main__":
