@@ -7,8 +7,8 @@ import argparse
 import csv
 from pathlib import Path
 
-from ebtcpacket import TcPacket, TcAcquisition
-from ebtmpacket import TmPacket, HkPacket, ScienceDataPacket
+from eb_tc_packet import EbTcPacket, EbTcAcquisition
+from eb_tm_packet import EbTmPacket, EbHkPacket, EbScienceDataPacket
 
 class EbEgseDumpDecoder:
     """
@@ -60,13 +60,13 @@ class EbEgseDumpDecoder:
             elif re.match(r"^Telecommand:\s*$", line):
                 try:
                     hexdata = next(self.in_file)
-                    yield None, TcPacket.fromhex(hexdata)
+                    yield None, EbTcPacket.fromhex(hexdata)
                 except Exception as e:
                     raise ValueError(f"Error at line {line_number}: {e}")
             elif re.match(r"^Telemetry Data:\s*$", line):
                 try:
                     hexdata = next(self.in_file)
-                    yield timestamp, TmPacket.fromhex(hexdata)
+                    yield timestamp, EbTmPacket.fromhex(hexdata)
                 except Exception as e:
                     raise ValueError(f"Error at line {line_number}: {e}")
             elif re.match(r"^Starting RS422if\s*$", line):
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     sci_header_fields = [
         "ACQUISITION_MODE",
         "SOL_NO", "MEASUREMENT_TYPE_ID", "MEASUREMENT_RUN_NO",
-        "startTime", "endTime",
+        "start_time", "end_time",
         "SWIR_OFFSET", "MWIR_OFFSET",
         "HEATSINK_START_TEMP", "HEATSINK_END_TEMP",
         "SWIR_START_TEMP", "SWIR_END_TEMP",
@@ -112,15 +112,15 @@ if __name__ == "__main__":
     acq_number = 0
     try:
         for timestamp, packet in log_file:
-            if isinstance(packet, TcPacket):
+            if isinstance(packet, EbTcPacket):
                 print(f"TC: {packet}", file=sys.stderr)
-                if isinstance(packet, TcAcquisition):
+                if isinstance(packet, EbTcAcquisition):
                     if sci_csv is not None and args.outbase is not None:
                         sci_csv.close()
                         sci_csv = None
             else:
                 print(f"TM: {packet}", file=sys.stderr)
-                if isinstance(packet, HkPacket):
+                if isinstance(packet, EbHkPacket):
                     if hk_csv is None:
                         if args.outbase is None:
                             hk_csv = sys.stdout
@@ -129,7 +129,7 @@ if __name__ == "__main__":
                         hk_writer = csv.writer(hk_csv)
                         hk_writer.writerow(packet.keys())
                     hk_writer.writerow(packet.values())
-                elif isinstance(packet, ScienceDataPacket):
+                elif isinstance(packet, EbScienceDataPacket):
                     if sci_csv is None:
                         if args.outbase is None:
                             sci_csv = sys.stdout
