@@ -240,7 +240,7 @@ class BitstructTemplateClass(BinaryDecoderClass):
             raise RuntimeError(f"{attr} is not present in {self.type_name}")
         return self._fields[attr][0] // 8
 
-    def tobinary(self):
+    def tobinary(self) -> bytes:
         """Return an encoded packet.
 
         I never intended to implement encoding, but it's trivial to do.
