@@ -1,11 +1,11 @@
 # Definitions, in the same format as used by tmstruct, used by the
-# various EB telecommands.
+# various telecommands.
 #
-# This needs improving, since it is incomplete for some of the more 
-# esoteric ones (SET_FDIR_FLAGS and PATCH). I'll get back to these 
+# This needs improving, since it is incomplete for some of the more
+# esoteric ones (SET_FDIR_FLAGS and PATCH). I'll get back to these
 # once the pressure is off.
 
-# Header of all TC's
+# Header of all EB TC's
 eb_header = [
     ( "magic",        ">u32" ),
     ( "blockType",    ">u1"  ),
@@ -21,7 +21,7 @@ eb_ret = [
     ( "retSeconds",    ">u32" ),
     ( "retFractional", ">u16" ),
 ]
-    
+
 eb_request_hk = [
     ( "qualifier", ">u8" ),
 ]
@@ -267,4 +267,176 @@ eb_switch_rs422 = [
 eb_set_tec_current = [
     ( "qualifier", ">u8"  ),
     ( "peltierDv", ">u16" ),
+]
+
+# All OB TCs are 8 bytes long, with the first byte encoding
+# the command ID and the last byte holding an 8 bit CRC.
+# The remaining 6 bytes are either parameters or "don't care".
+
+# This is for a generic decode so we can check CRC and determine
+# which of the structures below is correct.
+ob_generic = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "PARAMETERS", ">u48" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_hk_request = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC", ">u48" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_clear_errors = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC", ">u48" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_set_errors = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC1", ">u6" ),
+    ( "TMO", ">u1" ),
+    ( "IPA", ">u1" ),
+    ( "DONTC2", ">u4" ),
+    ( "CD", ">u1" ),
+    ( "AB", ">u1" ),
+    ( "ABS", ">u1" ),
+    ( "DSE", ">u1" ),
+    ( "IG_B", ">u1" ),
+    ( "IG_O", ">u1" ),
+    ( "DONTC3", ">u2" ),
+    ( "M_CD", ">u1" ),
+    ( "M_AB", ">u1" ),
+    ( "M_ABS", ">u1" ),
+    ( "M_DSE", ">u1" ),
+    ( "DONTC4", ">u24" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_power_control = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC1", ">u6" ),
+    ( "PD", ">u1" ),
+    ( "PM", ">u1" ),
+    ( "DONTC2", ">u40" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_heater_control = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC1", ">u3" ),
+    ( "S", ">u1" ),
+    ( "DM", ">u1" ),
+    ( "DA", ">u1" ),
+    ( "MM", ">u1" ),
+    ( "MA", ">u1" ),
+    ( "DONTC2", ">u40" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_set_mech_sp = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC1", ">u4" ),
+    ( "THRM_MECH_OFF_SP", ">u12" ),
+    ( "DONTC2", ">u4" ),
+    ( "THRM_MECH_ON_SP", ">u12" ),
+    ( "DONTC3", ">u16" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_set_detec_sp = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC1", ">u4" ),
+    ( "THRM_DET_OFF_SP", ">u12" ),
+    ( "DONTC2", ">u4" ),
+    ( "THRM_DET_ON_SP", ">u12" ),
+    ( "DONTC3", ">u16" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_set_mtr_param = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC1", ">u1" ),
+    ( "MTR_CURRENT", ">u7" ),
+    ( "DONTC2", ">u6" ),
+    ( "MGS", ">u2"),
+    ( "MTR_CHOP", ">u8" ),
+    ( "DONTC3", ">u4" ),
+    ( "MTR_SPEED", ">u4" ),
+    ( "DONTC4", ">u16" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_mtr_mov_pos = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC1", ">u1" ),
+    ( "MTR_POS", ">u15" ),
+    ( "DONTC2", ">u32" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_mtr_move_neg = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC1", ">u1" ),
+    ( "MTR_NEG", ">u15" ),
+    ( "DONTC2", ">u32" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_mtr_halt = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC", ">u48" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_mtr_homing = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC1", ">u6" ),
+    ( "CAL", ">u1" ),
+    ( "DIR", ">u1" ),
+    ( "DONTC2", ">u40" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_set_hk_samples = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "HK_ADC_SAMP", ">u8" ),
+    ( "DONTC2", ">u40" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_sci_offset = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC1", ">u4" ),
+    ( "SWIR_OFFSET", ">u12" ),
+    ( "DONTC2", ">u4" ),
+    ( "MWIR_OFFSET", ">u12" ),
+    ( "DONTC3", ">u16" ),
+    ( "CRC", ">u8" ),
+]
+
+ob_sci_request = [
+    ( "UNUSED", ">u4" ),
+    ( "CMD_ID", ">u4" ),
+    ( "DONTC1", ">u4" ),
+    ( "SCI_ADC_SAMP", ">u4" ),
+    ( "SCI_ADC_SKIP", ">u8" ),
+    ( "DONTC2", ">u32" ),
+    ( "CRC", ">u8" ),
 ]
