@@ -14,7 +14,7 @@ postproc: unflatten | dot -Tpng
 display: feh --scale-down -g 2560x720 -Z -
 pipe: "{{ postproc }}{% if stdout.isatty() %} | {{display}}{% endif %}"
 
-show_tcs: true
+show_tcs: false
 
 calibration: cyan
 science_data: yellow
@@ -204,41 +204,41 @@ digraph classes {
         style=invis;
         node [fillcolor="{{eb_tc}}", style=filled];
 
-        {{node("EbTcHeader")}};
-        {{node("EbTcPacket")}};
-        {{node("EbTcRet")}};
-        {{node("EbTcRequestHk")}};
-        {{node("EbTcPatch")}};
-        {{node("EbTcPatchSingle")}};
-        {{node("EbTcPatchInitialise")}};
-        {{node("EbTcPatchContinuation")}};
-        {{node("EbTcPatchFinalise")}};
-        {{node("EbTcDump")}};
-        {{node("EbTcSetHkRate")}};
-        {{node("EbTcMonitorAddr")}};
-        {{node("EbTcAbort")}};
-        {{node("EbTcGenericTc")}};
-        {{node("EbTcSafe")}};
-        {{node("EbTcStandby")}};
-        {{node("EbTcAcquisition")}};
-        {{node("EbTcSetMotorConfigs")}};
-        {{node("EbTcSetHeaterConfigs")}};
-        {{node("EbTcSetAcqConfigs")}};
-        {{node("EbTcSetTecSetpoint")}};
-        {{node("EbTcSetFdirLimits")}};
-        {{node("EbTcEnMechBoard")}};
-        {{node("EbTcEnDetBoard")}};
-        {{node("EbTcEnMechHeater")}};
-        {{node("EbTcEnDetHeater")}};
-        {{node("EbTcEnOb5V")}};
-        {{node("EbTcObPark")}};
-        {{node("EbTcObHoming")}};
-        {{node("EbTcObHk")}};
-        {{node("EbTcCheckMemory")}};
-        {{node("EbTcGoto")}};
-        {{node("EbTcCopyMemory")}};
-        {{node("EbTcSwitchRs422")}};
-        {{node("EbTcSetTecCurrent")}};
+        {{node("EbTcHeader", done=True)}};
+        {{node("EbTcPacket", done=True)}};
+        {{node("EbTcRet", done=True)}};
+        {{node("EbTcRequestHk", done=True)}};
+        {{node("EbTcPatch", done=True)}};
+        {{node("EbTcPatchSingle", done=True)}};
+        {{node("EbTcPatchInitialise", done=True)}};
+        {{node("EbTcPatchContinuation", done=True)}};
+        {{node("EbTcPatchFinalise", done=True)}};
+        {{node("EbTcDump", done=True)}};
+        {{node("EbTcSetHkRate", done=True)}};
+        {{node("EbTcMonitorAddr", done=True)}};
+        {{node("EbTcAbort", done=True)}};
+        {{node("EbTcGenericTc", done=True)}};
+        {{node("EbTcSafe", done=True)}};
+        {{node("EbTcStandby", done=True)}};
+        {{node("EbTcAcquisition", done=True)}};
+        {{node("EbTcSetMotorConfigs", done=True)}};
+        {{node("EbTcSetHeaterConfigs", done=True)}};
+        {{node("EbTcSetAcqConfigs", done=True)}};
+        {{node("EbTcSetTecSetpoint", done=True)}};
+        {{node("EbTcSetFdirLimits", done=True)}};
+        {{node("EbTcEnMechBoard", done=True)}};
+        {{node("EbTcEnDetBoard", done=True)}};
+        {{node("EbTcEnMechHeater", done=True)}};
+        {{node("EbTcEnDetHeater", done=True)}};
+        {{node("EbTcEnOb5V", done=True)}};
+        {{node("EbTcObPark", done=True)}};
+        {{node("EbTcObHoming", done=True)}};
+        {{node("EbTcObHk", done=True)}};
+        {{node("EbTcCheckMemory", done=True)}};
+        {{node("EbTcGoto", done=True)}};
+        {{node("EbTcCopyMemory", done=True)}};
+        {{node("EbTcSwitchRs422", done=True)}};
+        {{node("EbTcSetTecCurrent", done=True)}};
     }
 
     { EbTcHeader, EbTcPacket } -> BitstructTemplateClass;
