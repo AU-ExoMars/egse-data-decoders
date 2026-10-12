@@ -7,7 +7,7 @@ import argparse
 import csv
 from pathlib import Path
 
-from obtmpacket import TmPacket
+from ob_tm_packet import ObTmPacket
 
 class ObEgseDumpDecoder:
     """
@@ -60,7 +60,7 @@ class ObEgseDumpDecoder:
                     ).timestamp()
 
                     # Extract and return the data.
-                    packet = TmPacket.frombinary(bytes.fromhex(matched["hex"]))
+                    packet = ObTmPacket.frombinary(bytes.fromhex(matched["hex"]))
                     yield timestamp, packet
 
                 except Exception as e:
