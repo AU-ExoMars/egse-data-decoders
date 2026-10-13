@@ -5,6 +5,7 @@ the various OB and EB instruments.
 
 FIXME: All of these calibrations are approximate at the moment.
 """
+__all__ = [ "eb_models", "ob_models" ]
 
 from enfys_calibration import EbCalibration, ObCalibration
 from models import (
@@ -95,3 +96,15 @@ eb_calibration_em = EbCalibration(
 
     tec_drive_current_model = LinearModel(0.000016164, 0),
 )
+
+# For convenience, provide lookups by name and (for OB)
+# model ID.
+ob_models = {
+    ob_calibration_bb2.model_id: ob_calibration_bb2,
+    ob_calibration_bb2.model_name: ob_calibration_bb2,
+    ob_calibration_em.model_id: ob_calibration_em,
+    ob_calibration_em.model_name: ob_calibration_em,
+}
+eb_models = {
+    eb_calibration_em.model_name: eb_calibration_em,
+}
