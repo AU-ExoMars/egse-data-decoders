@@ -198,6 +198,11 @@ class ProcessedScienceRow(TimestampedScienceRow):
         """
         super().__init__(src_row, src_header, timestamp)
 
+        if self.MOD_ID is None:
+            self.MOD_ID = ob_calibration.model_id
+        elif self.MOD_ID != ob_calibration.model_id:
+            raise ValueError("Attempted to apply calibration from wrong model ID")
+
         self.swir_wavelength = ob_calibration.swir_wavelength_model(
             self.MTR_ABS_STEPS
         )
