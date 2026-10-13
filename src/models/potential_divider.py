@@ -89,6 +89,9 @@ class PotentialDividerModel(FittableModel):
         This is just a thin wrapper around dn_to_r and the 
         subclass-provided r_to_t.
         """
+        if dn is None:
+            return None
+
         if isinstance(dn, np.ndarray):
             return self.r_to_t(self.dn_to_r(dn))
 

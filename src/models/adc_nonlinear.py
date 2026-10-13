@@ -30,10 +30,15 @@ class AdcNonlinearModel(FittableModel):
         Uses np.piecewise, since this allows matrix operations and hence
         scipy.optimize.curve_fit can use it.
         """
+
+        if value is None:
+            return None
+
         meetpoint = self.slope*self.cutover + self.intercept
         exponent = self.slope*self.cutover/meetpoint
 
         if isinstance(value, np.ndarray):
+            # N.B. No attempt made to handle None here.
             value = np.array(value, dtype=float)
             return np.piecewise(value,
                 [
