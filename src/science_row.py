@@ -157,8 +157,10 @@ class TimestampedScienceRow(ScienceRow):
         timestamp: float|None = None,
     ) -> None:
         """Store timestamp and pass the rest up."""
-        self.timestamp = timestamp
         super().__init__(src_row, src_header)
+
+        if timestamp is not None:
+            self.timestamp = timestamp
 
 @dataclasses.dataclass(init=False)
 class ProcessedScienceRow(TimestampedScienceRow):
