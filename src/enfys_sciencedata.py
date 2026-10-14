@@ -2,12 +2,13 @@
 
 import copy
 import pathlib
+from collections.abc import Iterator
+
 import numpy as np
 import scipy
-from collections.abc import Iterator
-from typing import ClassVar
 
-from science_row import ScienceRow
+from enfys_model_extensions import ObScienceExtension
+from science_row import ProcessedScienceRow, ScienceRow
 
 
 class EnfysScienceDataSet:
@@ -23,11 +24,8 @@ class EnfysScienceDataSet:
     e.g.:
 
       for processed_row in EnfysScienceDataSet(raw_rows):
-          print(processed_row.swir_wavelength, processed_row.swir_dn)
+          print(processed_row.swir_wavelength, processed_row.swir_relative_dn)
     """
-
-    # Reflectivity of the "flat" (gold) data.
-    flat_reflectivity: ClassVar[float] = 0.95
 
     # Where the data came from - optional.
     origin_file: pathlib.Path|None = None
@@ -35,7 +33,7 @@ class EnfysScienceDataSet:
     dark: "EnfysScienceDataSet|None" = None
     flat: "EnfysScienceDataSet|None" = None
 
-    rows: list[ScienceRow]
+    rows: list[ProcessedScienceRow]
 
     def __init__(self,
             rows: list[ScienceRow]|None = None,
@@ -60,17 +58,11 @@ class EnfysScienceDataSet:
         if flat is not None and dark is None:
             raise ValueError("If flat are specified then dark are needed too")
 
-        # Store the rows. We do it via .append, since that will handle
-        # any processing needed and saves code duplication.
-        self.rows = copy.copy(rows)
-
-        # It's sometimes useful to be able to get an interpolated
-        # spectrum for any motor step value.
-        self._swir_interpolator: scipy.interpolate.CubicSpline|None = None
-        self._mwir_interpolator: scipy.interpolate.CubicSpline|None = None
-
-        if hasattr(self, "scan"):
-            self.scan()
+        # Store the rows. We'll do this via .append, since
+        # it guarantees the dependent invalidation of information
+        # also happens.
+        self.rows = []
+        self.append(rows)
 
     def append(self,
         rows: ScienceRow|list[ScienceRow],
@@ -83,11 +75,11 @@ class EnfysScienceDataSet:
         just cheating here because __add__ creates a whole new
         instance.
         """
-
         # Invalidate the interpolators since we've
         # just changed what data is present.
         self._swir_interpolator = None
         self._mwir_interpolator = None
+        self._scanned = False
 
         if isinstance(rows, list):
             self.rows += copy.copy(rows)
@@ -96,25 +88,37 @@ class EnfysScienceDataSet:
         self.rows.append(copy.copy(rows))
 
     @property
-    def swir_interpolator(self):
+    def swir_interpolator(self) -> scipy.interpolate.CubicSpline:
+        """Return a cubic spline interpolator based on SWIR scaled DN data.
+
+        In, for example, dark handling, we need to be able to get hold of a
+        DN value for motor positions that are, potentially, not in the
+        current data set. By using an interpolator, we can avoid worrying
+        about that.
+        """
         if self._swir_interpolator is None:
             self._swir_interpolator = self._make_interpolator(
-                [ [row.MTR_ABS_STEPS, row.swir_scaled_dn] for row in self ]
+                [ (row.MTR_ABS_STEPS, row.swir_scaled_dn) for row in self ]
             )
         return self._swir_interpolator
 
     @property
-    def mwir_interpolator(self):
+    def mwir_interpolator(self) -> scipy.interpolate.CubicSpline:
+        """Return an interpolator for MWIR data."""
         if self._mwir_interpolator is None:
             self._mwir_interpolator = self._make_interpolator(
-                [ [row.MTR_ABS_STEPS, row.mwir_scaled_dn] for row in self ]
+                [ (row.MTR_ABS_STEPS, row.mwir_scaled_dn) for row in self ]
             )
         return self._mwir_interpolator
 
-    def _make_interpolator(self, xy):
-        # scipy requires strictly increasing x values, so
-        # we need to do some preprocessing.
+    def _make_interpolator(self,
+            xy: list[tuple[float, float]]
+    ) -> scipy.interpolate.CubicSpline:
+        """Given X/Y data, return a CubicSpline that fits it.
 
+        scipy requires strictly increasing x values, so we need to do some
+        preprocessing so we can give it what it wants.
+        """
         # Rather than throwing stuff away, we'll take averages for
         # duplicate values.
         data = {}
@@ -131,13 +135,23 @@ class EnfysScienceDataSet:
         """Return the length of the data set."""
         return len(self.rows)
 
-    def __iter__(self) -> Iterator[ScienceRow]:
+    def __iter__(self) -> Iterator[ProcessedScienceRow]:
         """Iterate over the row list."""
         for i in range(len(self.rows)):
             yield self[i]
 
-    def __getitem__(self, idx: int|slice) -> ScienceRow|list[ScienceRow]:
+    def __getitem__(self,
+        idx: int|slice
+    ) -> ProcessedScienceRow|list[ProcessedScienceRow]:
         """Return the requested item from the list."""
+        if not self._scanned and hasattr(self, "scan"):
+            # We defer running any supplied "scan" method until
+            # we're asked for some data. This allows .append() to
+            # run efficiently in the case where the data set is
+            # being built row by row.
+            self.scan()
+            self._scanned = True
+
         if isinstance(idx, slice):
             # When we've got a slice, use it to build a comprehension
             # recursively.
@@ -148,3 +162,10 @@ class EnfysScienceDataSet:
             ]
 
         return self.rows[idx]
+
+class ObScienceDataSet(EnfysScienceDataSet,ObScienceExtension):
+    """A version of ScienceDataset which mixes in ObScienceExtension.
+
+    ObScienceExtension provides a scan function which finds binary
+    chops and monotonic sweeps in the data.
+    """
