@@ -1,6 +1,8 @@
 """Encapsulate EB and OB science data rows."""
 
 import dataclasses
+from collections.abc import Callable
+from typing import ClassVar
 
 from eb_tm_packet import (
     EbScienceDataCPacket,
@@ -136,10 +138,10 @@ class ScienceRow:
                     setattr(self, name, value)
                     seen.add(name)
 
-                for name, value in src_header.items():
-                    if name in fields and name not in seen:
-                        setattr(self, name, value)
-                        seen.add(name)
+            for name, value in src_header.items():
+                if name in fields and name not in seen:
+                    setattr(self, name, value)
+                    seen.add(name)
 
 @dataclasses.dataclass(init=False)
 class TimestampedScienceRow(ScienceRow):
@@ -170,11 +172,20 @@ class ProcessedScienceRow(TimestampedScienceRow):
     decoding of data to real-world units.
     """
 
+    # Reflectivity of the "flat" (gold) data.
+    flat_reflectivity: ClassVar[float] = 0.95
+
     swir_wavelength: float|None = None
     mwir_wavelength: float|None = None
 
     swir_scaled_dn: float|None = None
     mwir_scaled_dn: float|None = None
+
+    swir_dark_corrected_dn: float|None = None
+    mwir_dark_corrected_dn: float|None = None
+
+    swir_relative: float|None = None
+    mwir_relative: float|None = None
 
     swir_start_temperature: float|None = None
     heatsink_start_temperature: float|None = None
@@ -189,6 +200,10 @@ class ProcessedScienceRow(TimestampedScienceRow):
         src_row: ScienceRow|ObScienceDataPacket|EbScienceRow,
         src_header: EbScienceDataPacket|None = None,
         timestamp: float|None = None,
+        swir_dark_interpolator: Callable[float,float]|None = None,
+        mwir_dark_interpolator: Callable[float,float]|None = None,
+        swir_flat_interpolator: Callable[float,float]|None = None,
+        mwir_flat_interpolator: Callable[float,float]|None = None,
     ) -> None:
         """Post-process of data to real-world values.
 
@@ -251,3 +266,21 @@ class ProcessedScienceRow(TimestampedScienceRow):
             self.mwir_scaled_dn = ob_calibration.mwir_medium_to_high_model(
                 ob_calibration.mwir_low_to_medium_model(self.MWIR_LOW)
             )
+
+        if swir_dark_interpolator is not None:
+            dark_val = swir_dark_interpolator(self.MTR_ABS_STEPS)
+            self.swir_dark_corrected_dn = self.swir_scaled_dn - dark_val
+            if swir_flat_interpolator is not None:
+                flat_val = swir_flat_interpolator(self.MTR_ABS_STEPS)
+                self.swir_relative = (self.swir_dark_corrected_dn /
+                    ((flat_val - dark_val)*self.flat_reflectivity)
+                )
+
+        if mwir_dark_interpolator is not None:
+            dark_val = mwir_dark_interpolator(self.MTR_ABS_STEPS)
+            self.mwir_dark_corrected_dn = self.mwir_scaled_dn - dark_val
+            if mwir_flat_interpolator is not None:
+                flat_val = mwir_flat_interpolator(self.MTR_ABS_STEPS)
+                self.mwir_relative = (self.mwir_dark_corrected_dn /
+                        ((flat_val - dark_val)*self.flat_reflectivity)
+                )
