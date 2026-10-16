@@ -8,7 +8,6 @@ import numpy as np
 import scipy
 
 from enfys_calibration import ObCalibration
-from enfys_model_extensions import ObScienceExtension
 from science_row import ProcessedScienceRow, ScienceRow
 
 

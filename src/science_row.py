@@ -200,10 +200,10 @@ class ProcessedScienceRow(TimestampedScienceRow):
         src_row: ScienceRow|ObScienceDataPacket|EbScienceRow,
         src_header: EbScienceDataPacket|None = None,
         timestamp: float|None = None,
-        swir_dark_interpolator: Callable[float,float]|None = None,
-        mwir_dark_interpolator: Callable[float,float]|None = None,
-        swir_flat_interpolator: Callable[float,float]|None = None,
-        mwir_flat_interpolator: Callable[float,float]|None = None,
+        swir_dark_interpolator: Callable[[float],float]|None = None,
+        mwir_dark_interpolator: Callable[[float],float]|None = None,
+        swir_flat_interpolator: Callable[[float],float]|None = None,
+        mwir_flat_interpolator: Callable[[float],float]|None = None,
     ) -> None:
         """Post-process of data to real-world values.
 
