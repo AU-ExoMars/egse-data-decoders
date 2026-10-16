@@ -1,107 +1,125 @@
+"""Convenience class for handling housekeeping data sets."""
+
+import copy
+import pathlib
+from collections.abc import Iterator
+
 import numpy as np
 import scipy
-import warnings
-import pt1000
-import pathlib
-import obtmpacket
 
-class TimestampedObHkRow(obtmpacket.HkPacket):
-    timestamp:  float | None
+from enfys_calibration import ObCalibration, EbCalibration
 
-class ProcessedObHkRow(TimestampedObHkRow):
-    """HK row with added data decode"""
+from eb_tm_packet import EbHkPacket
+from eb_hk import ProcessedEbHk
+from ob_tm_packet import ObHkPacket
+from ob_hk import ProcessedObHk
 
-    voltage_3v3: float|None = None
-    voltage_1v5: float|None = None
-    digital_temperature: float|None = None
-    detector_temperature: float|None = None
-    mechanism_temperature: float|None = None
-    motor_temperature: float|None = None
-    mechanism_current: float|None = None
 
-class EnfysObHkDataSet:
-    """Base class"""
+class EnfysHkDataSet:
+    """Convenience class for handling science data sets.
 
-    # The model ID, as recorded in science and HK data.
-    model_id: int = 0
+    With subclasses for Ob and Eb, this can make generating processed data,
+    identifying sweeps, binary chops, etc, fairly simple.
 
-    # The name for this model ID.
-    model_name: str = "UNKNOWN"
+    The class behaves in a somewhat list-like fashion so that, having
+    stored a bunch of rows, you can then iterate/access them using familiar
+    constructs.
+
+    e.g.:
+
+      for processed_row in EnfysHkDataSet(raw_rows):
+          print(processed_row.swir_wavelength, processed_row.swir_relative_dn)
+    """
 
     # Where the data came from - optional.
-    origin_file: pathlib.Path = None
+    origin_file: pathlib.Path|None = None
 
-    # A brief text name for this data set.
-    name: str
+    # Store the calibration data that's appropriate to this set.
+    # The relevant subclass is responsible for getting hold of the
+    # correct calibration object.
+    ob_calibration: ObCalibration|None = None
+    eb_calibration: EbCalibration|None = None
 
-    # Temperature sensors.
-    digital_pt1000: pt1000.PT1000
-    detector_pt1000: pt1000.PT1000
-    motor_pt1000: pt1000.PT1000
-    mechanism_pt1000: pt1000.PT1000
+    # The actual meat of the data set.
+    rows: list[ProcessedObHk|ProcessedEbHk]
 
-    # Voltage and current sensors
-    voltage_3v3_slope: float
-    voltage_1v5_slope: float
-    mech_current_slope: float
+    def __init__(self,
+            rows: list[EbHkPacket|ObHkPacket]|None = None,
+            name: str|None = None,
+            origin_file: str|None = None,
+    ) -> None:
+        """Class constructor.
 
-    def __init__(self, raw_rows=[], name=None, origin_file=None):
+        Save the various attributes.
+        """
+        # Save args.
+        self.name = name
         if origin_file is not None:
             self.origin_file = pathlib.Path(origin_file)
 
-        if name is not None:
-            self.name = name
-        self.raw_rows = raw_rows.copy()
+        # Store the rows. We'll do this via .append, since
+        # it guarantees the dependent invalidation of information
+        # also happens.
+        self.rows = []
+        self.append([] if rows is None else rows)
 
-        # If actual data has been supplied, we may as well scan
-        # now, as that's what would be needed later. We *don't*
-        # scan after every .append(), for example, as the implication
-        # there is that the data is being built incrementally.
-        if hasattr(self, "scan"):
-            self.scan()
+    def append(self,
+        rows: EbHkPacket|ObHkPacket|list[EbHkPacket|ObHkPacket],
+    ) -> None:
+        """Append one or more rows to the dataset.
 
-    # We'll treat it as somewhat list-like so that, having stored a bunch
-    # of raw rows, you can then iterate/access the processed versions
-    # via familiar construct.
-    # e.g.:
-    #
-    # for processed_row in EnfysObHkDataSet(raw_rows):
-    #     print(processed_row.motor_temperature)
-
-    def append(self, rows):
-        """This isn't quite the same as a normal list append
+        This isn't quite the same as a normal list append
         because it handles appending another list. Implementing
         the __add__ method would be rather more difficult than
         just cheating here because __add__ creates a whole new
         instance.
         """
+        # Invalidate the interpolators since we've
+        # just changed what data is present.
+        self._swir_interpolator = None
+        self._mwir_interpolator = None
+        self._scanned = False
+
         if isinstance(rows, list):
-            self.raw_rows += rows
-        else:
-            self.raw_rows.append(rows)
+            self.rows += copy.copy(rows)
+            return
 
-    def __len__(self):
-        return len(self.raw_rows)
+        self.rows.append(copy.copy(rows))
 
-    def __iter__(self):
-        for i in range(len(self.raw_rows)):
+    def __len__(self) -> int:
+        """Return the length of the data set."""
+        return len(self.rows)
+
+    def __iter__(self) -> Iterator[ProcessedEbHk|ProcessedObHk]:
+        """Iterate over the row list."""
+        for i in range(len(self.rows)):
             yield self[i]
 
-    def __getitem__(self, idx):
+    def __getitem__(self,
+        idx: int|slice
+    ) -> ProcessedEbHk|ProcessedObHk|list[ProcessedEbHk|ProcessedObHk]:
+        """Return the requested item from the list."""
+        # Call the subclass-provided "scan" method, on demand.
+        # This should ensure that all rows are converted from
+        # *HkRow to Processed*HkRow.
+        if not self._scanned:
+            # We defer running the subclass "scan" method until
+            # we're asked for some data. This allows .append() to
+            # run efficiently in the case where the data set is
+            # being built row by row.
+            self.scan()
+            self._scanned = True
+
         if isinstance(idx, slice):
             # When we've got a slice, use it to build a comprehension
             # recursively.
-            return [self[i] for i in range(idx.start, idx.stop, 1 if idx.step is None else idx.step)]
+            return [
+                self[i]
+                    for i in range(
+                        idx.start, idx.stop,
+                        1 if idx.step is None else idx.step
+                    )
+            ]
 
-        row = self.raw_rows[idx]
-
-        return ProcessedObHkRow(src=row,
-            voltage_3v3 = row.HK_V_3V3 * self.voltage_3v3_slope,
-            voltage_1v5 = row.HK_V_1V5 * self.voltage_1v5_slope,
-            digital_temperature = self.digital_pt1000(row.DIGITAL_TRP),
-            detector_temperature = self.digital_pt1000(row.DETEC_TRP),
-            mechanism_temperature = self.digital_pt1000(row.MECH_TRP),
-            motor_temperature = self.digital_pt1000(row.MOTOR_TRP),
-            mechanism_current = row.HK_MECH_CUR * self.mech_current_slope
-        )
+        return self.rows[idx]
 

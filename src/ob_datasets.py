@@ -4,6 +4,8 @@ from collections import deque
 from enfys_models import ob_models
 from science_row import ProcessedScienceRow
 from enfys_sciencedata import EnfysScienceDataSet
+from enfys_hkdata import EnfysHkDataSet
+from ob_hk import ProcessedObHk
 
 
 @dataclasses.dataclass
@@ -28,7 +30,7 @@ class SweepInfo:
     mwir_chop: ChopInfo
 
 class ObScienceDataSet(EnfysScienceDataSet):
-    """A mixin that provides a scan() method for OB science data.
+    """A subclass that provides a scan() method for OB science data.
 
     This class uses the model ID that's embedded in OB science data to
     apply calibration functions to the science data. It also tries to
@@ -40,8 +42,7 @@ class ObScienceDataSet(EnfysScienceDataSet):
 
         Then identify binary chops and sweeps within the data set.
         """
-        # Convert any rows that aren't yet of type ProcessedScienceRow.
-        # This needs to happen in the extension rather than in
+        # This needs to happen in the subclass rather than in
         # EnfysScienceDataSet because EB data will need a different
         # conversion regime (raw science data from the EB doesn't have MOD_ID).
         self.ob_calibration = None
@@ -319,3 +320,25 @@ class ObScienceDataSet(EnfysScienceDataSet):
             add_sweep(start, i, direction)
 
 
+
+class ObHkDataSet(EnfysHkDataSet):
+    """A subclass that provides a scan() method for OB HK data.
+
+    This class uses the model ID that's embedded in OB HK data to
+    apply the appropriate calibration functions to the HK fields.
+    """
+
+    def scan(self) -> None:
+        """Convert any rows that aren't yet of type ProcessedObHk."""
+        self.ob_calibration = None
+        for i, row in enumerate(self.rows):
+            if self.ob_calibration is None:
+                self.ob_calibration = ob_models[row.MOD_ID]
+            elif self.ob_calibration.model_id != row.MOD_ID:
+                raise ValueError("This data set contains rows from different OB models")
+
+            if not isinstance(row, ProcessedObHk):
+                self.rows[i] = ProcessedObHk(
+                    src=row,
+                    calibration=self.ob_calibration
+                )
