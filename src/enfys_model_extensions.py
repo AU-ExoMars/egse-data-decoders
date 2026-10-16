@@ -61,6 +61,20 @@ class ObScienceExtension:
         self._find_binary_chops()
         self._find_sweeps()
 
+    @property
+    def chops(self):
+        if not self._scanned:
+            self.scan()
+            self._scanned = True
+        return self._chops
+
+    @property
+    def sweeps(self):
+        if not self._scanned:
+            self.scan()
+            self._scanned = True
+        return self._sweeps
+
     def _find_binary_chops(self) -> None:
         """Find binary chops within the provided science data.
 
@@ -79,7 +93,7 @@ class ObScienceExtension:
         """
         # We'll store a list of record numbers where binary
         # chops were found in the science data.
-        self.chops = []
+        self._chops = []
 
         # A queue for holding enough entries to detect a binary chop.
         checkqueue = deque(maxlen=12)
@@ -187,7 +201,7 @@ class ObScienceExtension:
                 if found_chop:
                     # Store the start and end point, along with the type.
                     if maybe_mwir:
-                        self.chops.append(ChopInfo(
+                        self._chops.append(ChopInfo(
                             start = i-checkqueue.maxlen+1,
                             end = i,
                             sensor = "MWIR",
@@ -196,7 +210,7 @@ class ObScienceExtension:
                             final_hi_dn = row.MWIR_HIGH,
                         ))
                     else:
-                        self.chops.append(ChopInfo(
+                        self._chops.append(ChopInfo(
                             start = i-checkqueue.maxlen+1,
                             end = i,
                             sensor = "SWIR",
@@ -217,7 +231,7 @@ class ObScienceExtension:
         holds the start, stop and direction ("UP", "DOWN" or "STATIONARY")
         values for each detected sweep.
         """
-        self.sweeps = []
+        self._sweeps = []
         direction = None
         start = None
         steps = None
@@ -227,14 +241,14 @@ class ObScienceExtension:
         def add_sweep(start: int, end: int, direction: str) -> None:
             swir_chop = None
             mwir_chop = None
-            for chop in self.chops:
+            for chop in self._chops:
                 if chop.sensor == "MWIR":
                     if mwir_chop is None or chop.end < start:
                         mwir_chop = chop
                 elif chop.sensor == "SWIR":
                     if swir_chop is None or chop.end < start:
                         swir_chop = chop
-            self.sweeps.append(SweepInfo(
+            self._sweeps.append(SweepInfo(
                 start=start, end=end, direction=direction,
                 swir_chop=swir_chop, mwir_chop=mwir_chop
             ))
@@ -244,7 +258,7 @@ class ObScienceExtension:
 
             # This is pretty inefficient - should track position and
             # chop number better.
-            for chop in self.chops:
+            for chop in self._chops:
                 if chop.start <= i <= chop.end:
                     skip = True
                     break
