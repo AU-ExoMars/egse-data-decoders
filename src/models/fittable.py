@@ -144,7 +144,7 @@ class FittableModel:
     def __str__(self) -> str:
         """Return a representation of the object."""
         params = ", ".join([
-            f"{name}={getattr(self, name)}"
+            f"{name}={getattr(self, name):6g}"
                 for name in self.__model_params
         ])
         return f"{self.__class__.__name__}({params})"
