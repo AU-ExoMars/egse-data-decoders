@@ -62,7 +62,7 @@ class EnfysScienceDataSet:
         # it guarantees the dependent invalidation of information
         # also happens.
         self.rows = []
-        self.append(rows)
+        self.append([] if rows is None else rows)
 
     def append(self,
         rows: ScienceRow|list[ScienceRow],
