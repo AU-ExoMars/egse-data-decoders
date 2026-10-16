@@ -7,6 +7,7 @@ from collections.abc import Iterator
 import numpy as np
 import scipy
 
+from enfys_calibration import ObCalibration
 from enfys_model_extensions import ObScienceExtension
 from science_row import ProcessedScienceRow, ScienceRow
 
@@ -14,7 +15,7 @@ from science_row import ProcessedScienceRow, ScienceRow
 class EnfysScienceDataSet:
     """Convenience class for handling science data sets.
 
-    With an added mixin, this can make generating processed data,
+    With subclasses for Ob and Eb, this can make generating processed data,
     identifying sweeps, binary chops, etc, fairly simple.
 
     The class behaves in a somewhat list-like fashion so that, having
@@ -33,6 +34,12 @@ class EnfysScienceDataSet:
     dark: "EnfysScienceDataSet|None" = None
     flat: "EnfysScienceDataSet|None" = None
 
+    # Store the calibration data that's appropriate to this set.
+    # The relevant subclass is responsible for getting hold of the
+    # correct calibration object.
+    ob_calibration: ObCalibration|None = None
+
+    # The actual meat of the data set.
     rows: list[ProcessedScienceRow]
 
     def __init__(self,
@@ -44,8 +51,7 @@ class EnfysScienceDataSet:
     ) -> None:
         """Class constructor.
 
-        Save the various attributes and, if a mixin supplies a "scan"
-        method, run it on the supplied rows.
+        Save the various attributes.
         """
         # Save args.
         self.dark = dark
@@ -144,8 +150,12 @@ class EnfysScienceDataSet:
         idx: int|slice
     ) -> ProcessedScienceRow|list[ProcessedScienceRow]:
         """Return the requested item from the list."""
-        if not self._scanned and hasattr(self, "scan"):
-            # We defer running any supplied "scan" method until
+        # Call the subclass-provided "scan" method, on demand.
+        # This should ensure that all rows are converted from
+        # ScienceRow to ProcessedScienceRow. It might perform
+        # other tasks, such as identifying acquisition sets.
+        if not self._scanned:
+            # We defer running the subclass "scan" method until
             # we're asked for some data. This allows .append() to
             # run efficiently in the case where the data set is
             # being built row by row.
@@ -157,15 +167,11 @@ class EnfysScienceDataSet:
             # recursively.
             return [
                 self[i]
-                    for i in range(idx.start, idx.stop,
-                        1 if idx.step is None else idx.step)
+                    for i in range(
+                        idx.start, idx.stop,
+                        1 if idx.step is None else idx.step
+                    )
             ]
 
         return self.rows[idx]
 
-class ObScienceDataSet(EnfysScienceDataSet,ObScienceExtension):
-    """A version of ScienceDataset which mixes in ObScienceExtension.
-
-    ObScienceExtension provides a scan function which finds binary
-    chops and monotonic sweeps in the data.
-    """
