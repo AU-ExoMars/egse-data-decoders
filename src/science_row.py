@@ -273,7 +273,7 @@ class ProcessedScienceRow(TimestampedScienceRow):
             if swir_flat_interpolator is not None:
                 flat_val = swir_flat_interpolator(self.MTR_ABS_STEPS)
                 self.swir_relative = (self.swir_dark_corrected_dn /
-                    ((flat_val - dark_val)*self.flat_reflectivity)
+                    ((flat_val - dark_val)/self.flat_reflectivity)
                 )
 
         if mwir_dark_interpolator is not None:
