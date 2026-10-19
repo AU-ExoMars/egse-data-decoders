@@ -1,5 +1,5 @@
-import sys
 """Attempt to emulate the behaviour of the ADCs at low DN values."""
+import numbers
 import numpy as np
 
 from .fittable import FittableModel
@@ -9,15 +9,16 @@ class AdcNonlinearModel(FittableModel):
     """Attempt to emulate the behaviour of the ADCs at low DN values."""
 
     def __init__(self,
-        slope: float|tuple[float,float]|None = None,
-        intercept: float|tuple[float,float]|None = None,
-        cutover: int|tuple[int, int]|None = (50, 300),
-        saturation: int|tuple[int, int]|None = (58000, 62000)
+        slope: numbers.Real|tuple[numbers.Real,numbers.Real]|None = None,
+        intercept: numbers.Real|tuple[numbers.Real,numbers.Real]|None = None,
+        cutover: numbers.Real|tuple[numbers.Real,numbers.Real]|None = None,
+        saturation: int|tuple[int, int]|None = None
     ) -> None:
         """Class constructor.
 
         Just pass everything up to FittableModel.
         """
+
         super().__init__(slope=slope, intercept=intercept, cutover=cutover, saturation=saturation)
 
     def __call__(self, value: float|np.ndarray) -> float|np.ndarray:
@@ -38,7 +39,13 @@ class AdcNonlinearModel(FittableModel):
 
         meetpoint = self.slope*self.cutover + self.intercept
         exponent = self.slope*self.cutover/meetpoint
-        xsat = (self.saturation - self.intercept)/self.slope
+
+        # When modelling, we may want to force saturation, but when applying
+        # we want to exclude it. e.g. when used to extrapolate from medium
+        # to high gain. Therefore, we allow saturation to be None and, in
+        # that case, set xsat to be an unattainable value so that we don't
+        # output a saturated value.
+        xsat = (self.saturation - self.intercept)/self.slope if self.saturation is not None else 65536
 
         if isinstance(value, np.ndarray):
             # N.B. No attempt made to handle None here.
