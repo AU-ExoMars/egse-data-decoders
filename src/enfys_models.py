@@ -26,11 +26,12 @@ ob_calibration_bb2 = ObCalibration(
     swir_chop_target = 5000,
     mwir_chop_target = 5000,
 
-    swir_wavelength_model = LinearModel(0.1218, 607.8),
-    mwir_wavelength_model = LinearModel(0.2165, 1096.1),
+    swir_wavelength_model = LinearModel(0.1212, 613.5),
+    mwir_wavelength_model = LinearModel(0.2162, 1100.7),
 
     heatsink_temperature_model = Pt1000Model(10000, 1021.31),
     swir_temperature_model = Pt1000Model(10000, 1013.02),
+
     eb_peltier_temperature_model = TecThermistorModel(4990, 1.364e-4, -3.758e-2, 8.153),
     digital_temperature_model = Pt1000Model(1000, 1060.74),
     detector_temperature_model = Pt1000Model(1000, 1079.80),
@@ -41,11 +42,11 @@ ob_calibration_bb2 = ObCalibration(
     voltage_1v5_model = LinearModel(5.2413e-5, 0),
     mechanism_current_model = LinearModel(3.3897e-6, 0),
 
-    swir_low_to_medium_model =  AdcNonlinearModel(29.552,  -699.0,  52, 63403),
-    swir_medium_to_high_model = AdcNonlinearModel(29.406,  -275.8,  50, 64356),
+    swir_low_to_medium_model =  AdcNonlinearModel(29.552,  -690.0,  52),
+    swir_medium_to_high_model = AdcNonlinearModel(29.406,  -275.8,  50),
 
-    mwir_low_to_medium_model =  AdcNonlinearModel(29.603, -1138.6,  69, 62975),
-    mwir_medium_to_high_model = AdcNonlinearModel(29.553,  -342.6, 115, 64316),
+    mwir_low_to_medium_model =  AdcNonlinearModel(29.603, -1138.6,  69),
+    mwir_medium_to_high_model = AdcNonlinearModel(29.553,  -342.6, 115),
 )
 
 # EM OB calibration values.
@@ -57,8 +58,8 @@ ob_calibration_em = ObCalibration(
     swir_chop_target = 5000,
     mwir_chop_target = 15000,
 
-    swir_wavelength_model = LinearModel(0.1218, 680.9),
-    mwir_wavelength_model = LinearModel(0.2220, 1192.9),
+    swir_wavelength_model = LinearModel(0.1170, 700.0),
+    mwir_wavelength_model = LinearModel(0.1852, 1275.8),
 
     heatsink_temperature_model = Pt1000Model(10046, 1006),
     swir_temperature_model = Pt1000Model(9906, 988),
