@@ -159,7 +159,6 @@ class EnfysScienceDataSet:
             # run efficiently in the case where the data set is
             # being built row by row.
             self.scan()
-            self._scanned = True
 
         if isinstance(idx, slice):
             # When we've got a slice, use it to build a comprehension
