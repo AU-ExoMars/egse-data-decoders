@@ -68,19 +68,18 @@ class ObScienceDataSet(EnfysScienceDataSet):
 
         self._find_binary_chops()
         self._find_sweeps()
+        self._scanned = True
 
     @property
     def chops(self):
         if not self._scanned:
             self.scan()
-            self._scanned = True
         return self._chops
 
     @property
     def sweeps(self):
         if not self._scanned:
             self.scan()
-            self._scanned = True
         return self._sweeps
 
     def _find_binary_chops(self) -> None:
