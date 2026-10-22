@@ -106,7 +106,7 @@ class EbScienceDataSet(EnfysScienceDataSet):
             config = self._latest_acq_config,
         ))
 
-    def add_science_packet(self, packet: EbScienceDataPacket) -> None:
+    def add_science_packet(self, packet: EbScienceDataPacket, timestamp=None) -> None:
         """Add rows from a science packet to the data set.
 
         For this class, we actually do ProcessedScienceRow conversion
@@ -117,6 +117,7 @@ class EbScienceDataSet(EnfysScienceDataSet):
             self.append(ProcessedScienceRow(
                 src_row=row,
                 src_header=packet,
+                timestamp=timestamp,
                 ob_calibration=self.ob_calibration,
                 swir_dark_interpolator=None
                     if self.dark is None else self.dark.swir_interpolator,
