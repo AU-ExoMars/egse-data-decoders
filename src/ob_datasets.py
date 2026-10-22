@@ -37,6 +37,8 @@ class ObScienceDataSet(EnfysScienceDataSet):
     identify binary chops and sweeps within the data set.
     """
 
+    ob_calibration: ObCalibration|None
+
     def scan(self) -> None:
         """Convert any rows that aren't of type ProcessedScienceRow.
 
