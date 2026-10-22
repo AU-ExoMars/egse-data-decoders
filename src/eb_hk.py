@@ -16,7 +16,7 @@ class TimestampedEbHk(EbHkPacket):
 
 class ProcessedEbHk(TimestampedEbHk):
 
-    processed_ob_hk: ProcessedObHk
+    processed_ob_hk: ProcessedObHk|None
     source_type: (type(EbRegularHkPacket)|type(EbResponseHkPacket)|None)
 
     tec_setpoint_temperature: float
@@ -34,7 +34,10 @@ class ProcessedEbHk(TimestampedEbHk):
     def __init__(self, ob_calibration: ObCalibration, eb_calibration: EbCalibration, **kwargs):
         super().__init__(**kwargs)
 
-        self.processed_ob_hk = ProcessedObHk(src=self.ob_hk, calibration=ob_calibration)
+        if ob_calibration is not None:
+            self.processed_ob_hk = ProcessedObHk(src=self.ob_hk, calibration=ob_calibration)
+        else:
+            self.processed_ob_hk = None
 
         # TEC is an odd case - the thermistor is in the OB, but it's the
         # EB that controls it. So calibration data lives in the OB
