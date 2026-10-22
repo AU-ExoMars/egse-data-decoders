@@ -5,7 +5,10 @@ import typing
 from eb_tc_packet import EbTcSetAcqConfigs
 from eb_tm_packet import EbScienceDataPacket
 from enfys_sciencedata import EnfysScienceDataSet
+from enfys_hkdata import EnfysHkDataSet
 from science_row import ProcessedScienceRow
+from eb_hk import ProcessedEbHk
+from enfys_models import ob_models
 
 
 @dataclasses.dataclass
@@ -124,3 +127,52 @@ class EbScienceDataSet(EnfysScienceDataSet):
                 mwir_flat_interpolator=None
                     if self.flat is None else self.flat.mwir_interpolator,
             ))
+
+class EbHkDataSet(EnfysHkDataSet):
+    """A subclass that provides a scan() method for EB HK data.
+
+    This class needs to be handed an EB calibration object, since
+    there's no info in EB telemetry which identifies the specific
+    model that's in use.
+    """
+
+    eb_calibration: EbCalibration|None
+    ob_calibration: ObCalibration|None
+
+    def __init__(self,
+        eb_calibration: EbCalibration,
+        *args: typing.Any,
+        **kwargs: typing.Any,
+    ) -> None:
+        """Class constructor.
+
+        eb_calibration is mandatory, since it can't be acquired from
+        anywhere else. The ob_calibration attribute will be determined
+        using the model ID that's embeded in OB HK data within the EB
+        telemetry. This is, of course, not available until the OB has
+        been powered up, but that doesn't matter since we won't have
+        any OB data to work with before then.
+        """
+        super().__init__(*args, **kwargs)
+
+        # Save the calibration.
+        self.eb_calibration = eb_calibration
+        self.ob_calibration = None
+
+    def scan(self) -> None:
+        """Convert any rows which aren't of type ProcessedEbHkRow"""
+
+        for i, row in enumerate(self.rows):
+            ob_model_id = (row.OB_HK_ID & 0b11100000) >> 5
+            if ob_model_id != 0:
+                if self.ob_calibration is None:
+                    self.ob_calibration = ob_models[ob_model_id]
+                elif ob_model_id != self.ob_calibration.model_id:
+                    raise ValueError("Data set contains multiple OB model IDs")
+
+            if not isinstance(row, ProcessedEbHk):
+                self.rows[i] = ProcessedEbHk(
+                    src = row,
+                    ob_calibration = self.ob_calibration,
+                    eb_calibration = self.eb_calibration,
+                )
