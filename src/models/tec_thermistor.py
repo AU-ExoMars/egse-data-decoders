@@ -77,10 +77,14 @@ class TecThermistorModel(PotentialDividerModel):
         with np.errstate(divide="ignore"):
             inner = self.b*self.b - 4*self.a*(self.c - np.log(r))
 
+        # If we end up with inner < 0, we'll replace with np.nan,
+        # so that it propagates through to the result. This is better
+        # than e.g. 0 which would report a real temperature (around 137
+        # degrees).
         if isinstance(inner, np.ndarray):
-            inner[inner < 0] = 0
+            inner[inner < 0] = np.nan
         elif inner < 0:
-            inner = 0
+            inner = np.nan
 
         return (-self.b - np.sqrt(inner))/(2*self.a)
 

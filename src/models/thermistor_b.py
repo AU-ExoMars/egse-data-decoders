@@ -66,8 +66,16 @@ class ThermistorBModel(PotentialDividerModel):
         return self._r_inf * np.exp(self.b / (t + self.celsius_to_kelvin))
 
     def r_to_t(self, r):
-        with np.errstate(divide="ignore"):
-            return self.b / np.log(r / self._r_inf) - self.celsius_to_kelvin
+
+        # Resistance equal to zero results in an absolute zero answer,
+        # which is, I guess, correct but more likely to indicate an ADC
+        # value of zero.
+        if isinstance(r, np.ndarray):
+            r[r == 0] = np.nan
+        elif r == 0:
+            r = np.nan
+
+        return self.b / np.log(r / self._r_inf) - self.celsius_to_kelvin
 
     @property
     def _r_inf(self):
