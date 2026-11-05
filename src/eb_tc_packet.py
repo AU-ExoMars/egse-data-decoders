@@ -244,7 +244,7 @@ class EbTcObPark(EbTcPacket):
     """The OB_PARK telecommand."""
 
     decoder: ClassVar[bool] = True
-    blockId: ClassVar[int] = 0x14
+    blockId: ClassVar[int] = 0x15
     template: ClassVar[list[tuple[str, str]]] = tc.eb_header + tc.eb_ob_park
 
 class EbTcObHoming(EbTcPacket):
