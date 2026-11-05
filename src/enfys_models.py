@@ -73,11 +73,11 @@ ob_calibration_em = ObCalibration(
     voltage_1v5_model = LinearModel(5.2413e-5, 0),
     mechanism_current_model = LinearModel(3.3897e-6, 0),
 
-    swir_low_to_medium_model =  AdcNonlinearModel(27.873,  7656.6, 145, 62833),
-    swir_medium_to_high_model = AdcNonlinearModel(28.206,  8563.8, 208, 64090),
+    swir_low_to_medium_model =  AdcNonlinearModel(27.873,  7656.6, 145),
+    swir_medium_to_high_model = AdcNonlinearModel(28.206,  8563.8, 208),
 
-    mwir_low_to_medium_model =  AdcNonlinearModel(28.120,  6906.8, 179, 62564),
-    mwir_medium_to_high_model = AdcNonlinearModel(28.061,  7653.0, 149, 63927),
+    mwir_low_to_medium_model =  AdcNonlinearModel(28.120,  6906.8, 179),
+    mwir_medium_to_high_model = AdcNonlinearModel(28.061,  7653.0, 149),
 )
 
 # EM EB calibration values.
