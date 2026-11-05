@@ -77,6 +77,8 @@ class ScienceRow:
     lobt: float|None = None
     start_time: float | None = None
     end_time: float | None = None
+    row_number_within_packet: int|None = None
+    approximate_time: float | None = None
 
     def __init__(self,
         src_row: "ScienceRow|ObScienceDataPacket|EbScienceRow|None" = None,
