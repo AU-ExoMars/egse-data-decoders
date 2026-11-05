@@ -60,12 +60,14 @@ class EbEgseDumpDecoder:
             elif re.match(r"^Telecommand:\s*$", line):
                 try:
                     hexdata = next(self.in_file)
+                    line_number += 1
                     yield None, EbTcPacket.fromhex(hexdata)
                 except Exception as e:
                     raise ValueError(f"Error at line {line_number}: {e}")
             elif re.match(r"^Telemetry Data:\s*$", line):
                 try:
                     hexdata = next(self.in_file)
+                    line_number += 1
                     yield timestamp, EbTmPacket.fromhex(hexdata)
                 except Exception as e:
                     raise ValueError(f"Error at line {line_number}: {e}")
