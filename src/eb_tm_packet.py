@@ -184,6 +184,15 @@ class EbScienceRow(BitstructTemplateClass):
     # in most cases it's going to be too long.
     strict_length_checking: ClassVar[bool] = False
 
+    # For e.g. mode 2 acquisitions, it's handy to know
+    # where, within the packet, the row is, since that gives
+    # us a *very* approximate time. This is fairly horrible,
+    # really - dark table scans mean that the timestamps aren't
+    # going to be particularly good, even for mode 2, on the first
+    # and last packets of an acquisition.
+    row_number_within_packet: int|None = None
+    approximate_time: float|None = None
+
 class EbScienceDataPacket(EbTmPacket):
     """Base class for science packets.
 
@@ -205,6 +214,10 @@ class EbScienceDataPacket(EbTmPacket):
     def _decode(self, data: bytes) -> bytes:
         data = super()._decode(data)
 
+        # Decode start and end times to floating point seconds.
+        self.start_time = self.START_TIME_S + self.START_TIME_MS / 1000
+        self.end_time = self.END_TIME_S + self.END_TIME_MS / 1000
+
         # The science rows themselves need decoding. Run through the
         # data, creating new EbScienceRow objects.
         self.measurements = []
@@ -220,9 +233,10 @@ class EbScienceDataPacket(EbTmPacket):
             self.measurements.append(EbScienceRow.frombinary(science))
             science = science[EbScienceRow.min_length_bytes:]
 
-        # Decode start and end times to floating point seconds.
-        self.start_time = self.START_TIME_S + self.START_TIME_MS / 1000
-        self.end_time = self.END_TIME_S + self.END_TIME_MS / 1000
+        # Now go back and fill in approximate timestamps.
+        for i, row in enumerate(self.measurements):
+            row.row_number_within_packet = i
+            row.approximate_time = self.start_time + i*(self.end_time-self.start_time)/len(self.measurements)
 
         return data
 
