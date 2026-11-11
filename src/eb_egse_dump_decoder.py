@@ -114,31 +114,25 @@ def main():
     try:
         for timestamp, packet in log_file:
             if isinstance(packet, EbTcPacket):
-                print(f"TC: {packet}", file=sys.stderr)
+                print(f"Telecommand: {packet}")
                 if isinstance(packet, EbTcAcquisition):
-                    if sci_csv is not None and args.outbase is not None:
+                    if sci_csv is not None:
                         sci_csv.close()
                         sci_csv = None
             else:
-                print(f"TM: {packet}", file=sys.stderr)
+                if args.outbase is None:
+                    print(f"Telemetry: {packet}")
                 if isinstance(packet, EbHkPacket):
-                    if hk_csv is None:
-                        if args.outbase is None:
-                            hk_csv = sys.stdout
-                        else:
-                            hk_csv = Path(f"{args.outbase}_HK.csv").open("w")
+                    if hk_csv is None and args.outbase is not None:
+                        hk_csv = Path(f"{args.outbase}_HK.csv").open("w")
                         hk_writer = csv.writer(hk_csv)
                         hk_writer.writerow(packet.keys())
-                    hk_writer.writerow(packet.values())
+                    if hk_csv is not None:
+                        hk_writer.writerow(packet.values())
                 elif isinstance(packet, EbScienceDataPacket):
-                    if sci_csv is None:
-                        if args.outbase is None:
-                            sci_csv = sys.stdout
-                        else:
-                            acq_number += 1
-                            if sci_csv is not None:
-                                sci_csv.close()
-                            sci_csv = Path(f"{args.outbase}_SCI_{acq_number:02d}.csv").open("w")
+                    if sci_csv is None and args.outbase is not None:
+                        acq_number += 1
+                        sci_csv = Path(f"{args.outbase}_SCI_{acq_number:02d}.csv").open("w")
                         sci_writer = csv.writer(sci_csv)
 
                         for field in sci_header_fields:
@@ -146,8 +140,9 @@ def main():
                         sci_writer.writerow([])
 
                         sci_writer.writerow(sci_row_fields)
-                    for row in packet.measurements:
-                        sci_writer.writerow([getattr(row, field) for field in sci_row_fields])
+                    if sci_csv is not None:
+                        for row in packet.measurements:
+                            sci_writer.writerow([getattr(row, field) for field in sci_row_fields])
     except Exception as e:
         raise
         print(f"Error: {str(e)}", file=sys.stderr)
