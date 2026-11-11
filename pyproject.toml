@@ -9,3 +9,10 @@ dependencies = [
     "numpy>=2.2.6",
     "scipy>=1.15.3",
 ]
+
+[project.scripts]
+ob_dump = "ob_egse_dump_decoder:main"
+eb_dump = "eb_egse_dump_decoder:main"
+
+[tool.uv]
+package = true

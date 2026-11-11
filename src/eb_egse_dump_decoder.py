@@ -79,8 +79,7 @@ class EbEgseDumpDecoder:
         # Seek back to the start of the file so the iterator can be re-run if needed.
         self.in_file.seek(0)
 
-
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Decode data from EB egse log")
     parser.add_argument("logfile", type=str, metavar="something.LOG", help="Data log from egse")
     parser.add_argument("-outbase", type=str, nargs="?", metavar="outbase", help="Base name for constructing CSV files")
@@ -153,3 +152,6 @@ if __name__ == "__main__":
         raise
         print(f"Error: {str(e)}", file=sys.stderr)
         exit(1)
+
+if __name__ == "__main__":
+    main()
