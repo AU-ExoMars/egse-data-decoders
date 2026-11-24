@@ -248,6 +248,9 @@ class ObScienceDataSet(EnfysScienceDataSet):
         pos_queue = deque(maxlen=2)
 
         def add_sweep(start: int, end: int, direction: str) -> None:
+            if direction is None:
+                # Not currently sure what causes this.
+                return
             swir_chop = None
             mwir_chop = None
             for chop in self._chops:
