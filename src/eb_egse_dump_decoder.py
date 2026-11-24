@@ -82,8 +82,12 @@ class EbEgseDumpDecoder:
 def main():
     parser = argparse.ArgumentParser(description="Decode data from EB egse log")
     parser.add_argument("logfile", type=str, metavar="something.LOG", help="Data log from egse")
-    parser.add_argument("-outbase", type=str, nargs="?", metavar="outbase", help="Base name for constructing CSV files")
+    parser.add_argument("-outbase", type=str, metavar="outbase", help="Base name for constructing CSV files")
+    parser.add_argument("-hk_fields", type=str, metavar="FIELD,FIELD2,...", help="List of fields to extract from HK data")
     args = parser.parse_args()
+
+    if args.hk_fields is not None:
+        args.hk_fields = args.hk_fields.split(",")
 
     try:
         log_file = EbEgseDumpDecoder(args.logfile)
@@ -126,9 +130,15 @@ def main():
                     if hk_csv is None and args.outbase is not None:
                         hk_csv = Path(f"{args.outbase}_HK.csv").open("w")
                         hk_writer = csv.writer(hk_csv)
-                        hk_writer.writerow(packet.keys())
+                        if args.hk_fields is None:
+                            hk_writer.writerow(packet.keys())
+                        else:
+                            hk_writer.writerow(args.hk_fields)
                     if hk_csv is not None:
-                        hk_writer.writerow(packet.values())
+                        if args.hk_fields is None:
+                            hk_writer.writerow(packet.values())
+                        else:
+                            hk_writer.writerow([packet[x] for x in args.hk_fields])
                 elif isinstance(packet, EbScienceDataPacket):
                     if sci_csv is None and args.outbase is not None:
                         acq_number += 1
